@@ -1,5 +1,5 @@
 /* =========================================================
-   PERRYCITY — PHASE 1
+   PERRYCITY — PHASE 1 (gefixt)
    Kamera, Grid, Karte, Klick-System, Info-Panel
    ========================================================= */
 
@@ -27,6 +27,33 @@ const COLS = WORLD_W / TILE;
 const ROWS = WORLD_H / TILE;
 
 
+/* ---------- STRASSEN-POSITIONEN ---------- */
+
+const MAIN_ROAD_X = 24 * TILE;
+const MAIN_ROAD_Y = 24 * TILE;
+const RIVER_Y     = 28 * TILE;
+
+const SIDE_ROADS_X = [4, 10, 16, 20, 30, 36, 42];
+
+function isOnRoad(gx, gy) {
+
+    if (gy * TILE === MAIN_ROAD_Y) return true;
+
+    if (gx * TILE === MAIN_ROAD_X) return true;
+
+    for (var i = 0; i < SIDE_ROADS_X.length; i++) {
+
+        if (gx === SIDE_ROADS_X[i]) return true;
+    }
+
+    if (gy * TILE === RIVER_Y || gy * TILE === RIVER_Y + TILE) {
+        return true;
+    }
+
+    return false;
+}
+
+
 /* ---------- SPIELVARIABLEN ---------- */
 
 let currentPlayer = null;
@@ -42,7 +69,7 @@ let buildingSprites = [];
 
 const cam = {
     speed:     6,
-    zoomMin:   0.35,
+    zoomMin:   0.5,
     zoomMax:   2.0,
     zoomSpeed: 0.0012,
     dragging:  false,
@@ -96,43 +123,27 @@ function showInfoPanel(data) {
     type.textContent  = data.category || "";
     owner.textContent = data.ownerName || "-";
 
-
     let statsHTML = "";
 
     if (data.income !== undefined) {
-
-        statsHTML += `
-            <div class="info-stat-row">
-                <span class="info-stat-label">Einkommen</span>
-                <span class="info-stat-value">
-                    ${formatMoney(data.income)} €/min
-                </span>
-            </div>
-        `;
+        statsHTML += '<div class="info-stat-row">' +
+            '<span class="info-stat-label">Einkommen</span>' +
+            '<span class="info-stat-value">' + formatMoney(data.income) + ' €/min</span>' +
+            '</div>';
     }
 
     if (data.level !== undefined) {
-
-        statsHTML += `
-            <div class="info-stat-row">
-                <span class="info-stat-label">Stufe</span>
-                <span class="info-stat-value">
-                    ${data.level} / ${data.maxLevel || 5}
-                </span>
-            </div>
-        `;
+        statsHTML += '<div class="info-stat-row">' +
+            '<span class="info-stat-label">Stufe</span>' +
+            '<span class="info-stat-value">' + data.level + ' / ' + (data.maxLevel || 5) + '</span>' +
+            '</div>';
     }
 
     if (data.population !== undefined) {
-
-        statsHTML += `
-            <div class="info-stat-row">
-                <span class="info-stat-label">Einwohner</span>
-                <span class="info-stat-value">
-                    ${data.population}
-                </span>
-            </div>
-        `;
+        statsHTML += '<div class="info-stat-row">' +
+            '<span class="info-stat-label">Einwohner</span>' +
+            '<span class="info-stat-value">' + data.population + '</span>' +
+            '</div>';
     }
 
     stats.innerHTML = statsHTML;
@@ -141,10 +152,7 @@ function showInfoPanel(data) {
 }
 
 function closeInfoPanel() {
-
-    document
-        .getElementById("info-panel")
-        .classList.add("hidden");
+    document.getElementById("info-panel").classList.add("hidden");
 }
 
 
@@ -164,32 +172,27 @@ async function register() {
     const password   = passEl.value;
 
     if (!playerName || !password) {
-        msgEl.textContent =
-            "Bitte Spielername und Passwort eingeben.";
+        msgEl.textContent = "Bitte Spielername und Passwort eingeben.";
         return;
     }
 
     if (playerName.length < 3) {
-        msgEl.textContent =
-            "Der Spielername muss mindestens 3 Zeichen haben.";
+        msgEl.textContent = "Der Spielername muss mindestens 3 Zeichen haben.";
         return;
     }
 
     if (playerName.length > 20) {
-        msgEl.textContent =
-            "Der Spielername darf höchstens 20 Zeichen haben.";
+        msgEl.textContent = "Der Spielername darf höchstens 20 Zeichen haben.";
         return;
     }
 
     if (password.length < 6) {
-        msgEl.textContent =
-            "Das Passwort muss mindestens 6 Zeichen haben.";
+        msgEl.textContent = "Das Passwort muss mindestens 6 Zeichen haben.";
         return;
     }
 
     if (!/^[a-zA-Z0-9_-]+$/.test(playerName)) {
-        msgEl.textContent =
-            "Erlaubt sind nur Buchstaben, Zahlen, _ und -.";
+        msgEl.textContent = "Erlaubt sind nur Buchstaben, Zahlen, _ und -.";
         return;
     }
 
@@ -211,8 +214,7 @@ async function register() {
         }
 
         if (existing) {
-            msgEl.textContent =
-                "Dieser Spielername ist bereits vergeben.";
+            msgEl.textContent = "Dieser Spielername ist bereits vergeben.";
             return;
         }
 
@@ -233,19 +235,17 @@ async function register() {
         }
 
         if (!authData.user) {
-            msgEl.textContent =
-                "Spieler konnte nicht erstellt werden.";
+            msgEl.textContent = "Spieler konnte nicht erstellt werden.";
             return;
         }
 
         if (!authData.session) {
-            msgEl.textContent =
-                "Account erstellt. 'Confirm email' muss in Supabase aus sein.";
+            msgEl.textContent = "Account erstellt. 'Confirm email' muss in Supabase aus sein.";
             return;
         }
 
         const spawnX = Math.floor(COLS / 2);
-        const spawnY = Math.floor(ROWS / 2);
+        const spawnY = Math.floor(ROWS / 2) - 4;
 
         const { error: pErr } = await client
             .from("players")
@@ -259,8 +259,7 @@ async function register() {
             });
 
         if (pErr) {
-            msgEl.textContent =
-                "Profil konnte nicht gespeichert werden.";
+            msgEl.textContent = "Profil konnte nicht gespeichert werden.";
             return;
         }
 
@@ -289,8 +288,7 @@ async function login() {
     const password   = passEl.value;
 
     if (!playerName || !password) {
-        msgEl.textContent =
-            "Bitte Spielername und Passwort eingeben.";
+        msgEl.textContent = "Bitte Spielername und Passwort eingeben.";
         return;
     }
 
@@ -307,8 +305,7 @@ async function login() {
             });
 
         if (error) {
-            msgEl.textContent =
-                "Spielername oder Passwort ist falsch.";
+            msgEl.textContent = "Spielername oder Passwort ist falsch.";
             return;
         }
 
@@ -362,12 +359,8 @@ async function loadGame() {
         document.getElementById("money").textContent =
             formatMoney(data.money);
 
-        document.getElementById("login-screen").style.display =
-            "none";
-
-        document.getElementById("game-screen").style.display =
-            "block";
-
+        document.getElementById("login-screen").style.display = "none";
+        document.getElementById("game-screen").style.display  = "block";
 
         startGame(data);
 
@@ -407,7 +400,7 @@ function startGame(player) {
         width:  window.innerWidth,
         height: window.innerHeight - 62,
 
-        backgroundColor: "#4a9e5c",
+        backgroundColor: "#6db56d",
 
         scene: {
 
@@ -424,26 +417,20 @@ function startGame(player) {
 
     game = new Phaser.Game(config);
 
-
     setTimeout(function () {
         var hint = document.getElementById("controls-hint");
-        if (hint) {
-            hint.classList.add("fade-out");
-        }
+        if (hint) hint.classList.add("fade-out");
     }, 6000);
 }
 
 
 /* =========================================================
-   KAMERA: WASD / Pfeiltasten + Maus-Ziehen + Zoom
+   KAMERA
    ========================================================= */
 
 function updateCamera(scene) {
 
     var c = scene.cameras.main;
-
-
-    /* --- WASD / Pfeile --- */
 
     var dx = 0;
     var dy = 0;
@@ -454,26 +441,18 @@ function updateCamera(scene) {
     if (keys["KeyS"] || keys["ArrowDown"])  dy += 1;
 
     if (dx !== 0 || dy !== 0) {
-
         var len = Math.sqrt(dx * dx + dy * dy);
-
         c.scrollX += (dx / len) * cam.speed / c.zoom;
         c.scrollY += (dy / len) * cam.speed / c.zoom;
     }
 
-
-    /* --- Maus-Ziehen (linke Taste) --- */
-
     var pointer = scene.input.activePointer;
 
     if (cam.dragging) {
-
         var diffX = cam.lastX - pointer.x;
         var diffY = cam.lastY - pointer.y;
-
         c.scrollX += diffX / c.zoom;
         c.scrollY += diffY / c.zoom;
-
         cam.lastX = pointer.x;
         cam.lastY = pointer.y;
     }
@@ -486,221 +465,178 @@ function updateCamera(scene) {
 
 function createWorld(scene, player) {
 
-    mapGraphics = scene.add.graphics();
-
     drawBaseMap(scene);
-
     drawGridLines(scene);
-
     placeBuildings(scene, player);
-
     setupCamera(scene);
-
     setupInput(scene);
 }
 
 
 /* =========================================================
-   GRUNDKARTE ZEICHNEN
+   GRUNDKARTE
    ========================================================= */
 
 function drawBaseMap(scene) {
 
     var g = scene.add.graphics();
 
-
-    /* --- Gras (gesamte Welt) --- */
-
+    /* --- Gras --- */
     g.fillStyle(0x6db56d, 1);
     g.fillRect(0, 0, WORLD_W, WORLD_H);
 
-
-    /* --- Wasser: Fluss mittig horizontal --- */
-
-    var riverY = Math.floor(ROWS / 2) * TILE - TILE;
-
+    /* --- Fluss --- */
     g.fillStyle(0x3daee0, 1);
-    g.fillRect(0, riverY, WORLD_W, TILE * 2);
+    g.fillRect(0, RIVER_Y, WORLD_W, TILE * 2);
 
-    g.fillStyle(0x5bc4eb, 0.4);
-    g.fillRect(0, riverY + 8, WORLD_W, 6);
-
+    g.fillStyle(0x5bc4eb, 0.5);
+    g.fillRect(0, RIVER_Y + 10, WORLD_W, 4);
 
     /* --- Hauptstrasse horizontal --- */
-
-    var mainRoadY = Math.floor(ROWS / 2) * TILE - TILE * 3;
-
     g.fillStyle(0x555b5e, 1);
-    g.fillRect(0, mainRoadY, WORLD_W, TILE);
-
-    drawRoadLines(g, 0, mainRoadY, WORLD_W, TILE);
-
+    g.fillRect(0, MAIN_ROAD_Y, WORLD_W, TILE);
+    drawRoadLines(g, 0, MAIN_ROAD_Y, WORLD_W, TILE);
 
     /* --- Hauptstrasse vertikal --- */
-
-    var mainRoadX = Math.floor(COLS / 2) * TILE - TILE;
-
     g.fillStyle(0x555b5e, 1);
-    g.fillRect(mainRoadX, 0, TILE, WORLD_H);
+    g.fillRect(MAIN_ROAD_X, 0, TILE, WORLD_H);
+    drawRoadLinesV(g, MAIN_ROAD_X, 0, TILE, WORLD_H);
 
-    drawRoadLinesV(g, mainRoadX, 0, TILE, WORLD_H);
-
-
-    /* --- Seitliche Strassen --- */
-
-    var sideRoads = [8, 16, 24, 32, 40];
-
-    sideRoads.forEach(function (col) {
-
-        if (Math.abs(col * TILE - mainRoadX) < TILE * 2) return;
+    /* --- Seitenstrassen --- */
+    SIDE_ROADS_X.forEach(function (col) {
 
         g.fillStyle(0x6b7175, 1);
-        g.fillRect(col * TILE, 0, TILE, riverY);
-        g.fillRect(col * TILE, riverY + TILE * 2, TILE, WORLD_H - riverY - TILE * 2);
+        g.fillRect(col * TILE, 0, TILE, RIVER_Y);
+        g.fillRect(col * TILE, RIVER_Y + TILE * 2, TILE, WORLD_H - RIVER_Y - TILE * 2);
+
+        drawRoadLinesV(g, col * TILE, 0, TILE, RIVER_Y);
+        drawRoadLinesV(g, col * TILE, RIVER_Y + TILE * 2, TILE, WORLD_H - RIVER_Y - TILE * 2);
     });
 
+    /* --- Querstrassen (horizontal, oberhalb Fluss) --- */
+    var crossY1 = 6 * TILE;
+    var crossY2 = 14 * TILE;
+    var crossY3 = 20 * TILE;
 
-    /* --- Wohnhaeuser (obere Haelfte) --- */
+    g.fillStyle(0x6b7175, 1);
 
-    var housePositions = [
-        [3, 5],  [3, 8],  [3, 12],
-        [6, 5],  [6, 9],  [6, 13],
-        [10, 4], [10, 7], [10, 11],
-        [14, 6], [14, 10], [14, 14],
-        [18, 5], [18, 9],
-        [22, 6], [22, 11],
-        [26, 4], [26, 8], [26, 13],
-        [30, 5], [30, 10],
-        [35, 6], [35, 12],
-        [38, 4], [38, 9],
-        [42, 7], [42, 11],
-        [45, 5], [45, 10],
+    g.fillRect(0, crossY1, MAIN_ROAD_X - TILE, TILE);
+    g.fillRect(MAIN_ROAD_X + TILE * 2, crossY1, WORLD_W - MAIN_ROAD_X - TILE * 2, TILE);
+
+    g.fillRect(0, crossY2, MAIN_ROAD_X - TILE, TILE);
+    g.fillRect(MAIN_ROAD_X + TILE * 2, crossY2, WORLD_W - MAIN_ROAD_X - TILE * 2, TILE);
+
+    g.fillRect(0, crossY3, MAIN_ROAD_X - TILE, TILE);
+    g.fillRect(MAIN_ROAD_X + TILE * 2, crossY3, WORLD_W - MAIN_ROAD_X - TILE * 2, TILE);
+
+    /* --- Querstrassen (horizontal, unterhalb Fluss) --- */
+    var crossY4 = 32 * TILE;
+    var crossY5 = 38 * TILE;
+    var crossY6 = 44 * TILE;
+
+    g.fillRect(0, crossY4, MAIN_ROAD_X - TILE, TILE);
+    g.fillRect(MAIN_ROAD_X + TILE * 2, crossY4, WORLD_W - MAIN_ROAD_X - TILE * 2, TILE);
+
+    g.fillRect(0, crossY5, MAIN_ROAD_X - TILE, TILE);
+    g.fillRect(MAIN_ROAD_X + TILE * 2, crossY5, WORLD_W - MAIN_ROAD_X - TILE * 2, TILE);
+
+    g.fillRect(0, crossY6, MAIN_ROAD_X - TILE, TILE);
+    g.fillRect(MAIN_ROAD_X + TILE * 2, crossY6, WORLD_W - MAIN_ROAD_X - TILE * 2, TILE);
+
+    /* --- Wohnhaeuser (oben) --- */
+    var housesTop = [
+        [2,2],[2,4],[2,8],[2,10],[2,12],
+        [6,2],[6,4],[6,8],[6,10],
+        [12,2],[12,4],[12,8],[12,12],
+        [18,2],[18,4],[18,8],[18,10],
+        [22,2],[22,4],[22,8],[22,10],
+        [28,2],[28,4],[28,8],[28,10],[28,12],
+        [32,2],[32,4],[32,8],[32,10],
+        [38,2],[38,4],[38,8],[38,10],
+        [44,2],[44,4],[44,8],[44,10],
     ];
 
-    housePositions.forEach(function (pos) {
-
+    housesTop.forEach(function (pos) {
         var hx = pos[0] * TILE;
         var hy = pos[1] * TILE;
-
-        if (Math.abs(hx - mainRoadX) < TILE * 2) return;
-        if (hy >= riverY - TILE && hy <= riverY + TILE * 2) return;
-
-        drawHouse(g, scene, hx, hy, "🏠");
+        if (isOnRoad(pos[0], pos[1])) return;
+        drawHouse(g, hx, hy);
     });
 
-
-    /* --- Wohnhaeuser (untere Haelfte) --- */
-
-    var housePositionsLower = [
-        [3, 22],  [3, 26],  [3, 30],
-        [6, 23],  [6, 28],
-        [10, 22], [10, 27], [10, 31],
-        [14, 24], [14, 29],
-        [18, 22], [18, 27], [18, 32],
-        [22, 23], [22, 28],
-        [26, 22], [26, 26], [26, 31],
-        [30, 24], [30, 29],
-        [35, 23], [35, 28],
-        [38, 22], [38, 27],
-        [42, 25], [42, 30],
-        [45, 23], [45, 28],
+    /* --- Wohnhaeuser (unten) --- */
+    var housesBot = [
+        [2,30],[2,33],[2,36],[2,40],[2,42],
+        [6,30],[6,33],[6,36],[6,40],
+        [12,30],[12,33],[12,36],[12,40],
+        [18,30],[18,33],[18,36],[18,40],
+        [22,30],[22,33],[22,36],[22,40],
+        [28,30],[28,33],[28,36],[28,40],[28,42],
+        [32,30],[32,33],[32,36],[32,40],
+        [38,30],[38,33],[38,36],[38,40],
+        [44,30],[44,33],[44,36],[44,40],
     ];
 
-    housePositionsLower.forEach(function (pos) {
-
+    housesBot.forEach(function (pos) {
         var hx = pos[0] * TILE;
         var hy = pos[1] * TILE;
-
-        if (Math.abs(hx - mainRoadX) < TILE * 2) return;
-        if (hy >= riverY - TILE && hy <= riverY + TILE * 2) return;
-
-        drawHouse(g, scene, hx, hy, "🏠");
+        if (isOnRoad(pos[0], pos[1])) return;
+        drawHouse(g, hx, hy);
     });
 
-
-    /* --- Park (oben-links) --- */
-
+    /* --- Park (oben links) --- */
     g.fillStyle(0x4a9e5c, 1);
-    g.fillRect(1 * TILE, 2 * TILE, TILE * 4, TILE * 2);
+    g.fillRect(1 * TILE, 16 * TILE, TILE * 3, TILE * 3);
 
-    g.fillStyle(0x3d8a4e, 1);
+    drawTree(g, 1.5 * TILE, 16.5 * TILE);
+    drawTree(g, 2.5 * TILE, 17 * TILE);
+    drawTree(g, 3 * TILE, 18 * TILE);
+    drawTree(g, 1.8 * TILE, 18.3 * TILE);
 
-    drawTree(g, 1.5 * TILE, 2.3 * TILE);
-    drawTree(g, 3 * TILE, 2.8 * TILE);
-    drawTree(g, 4 * TILE, 2.1 * TILE);
-    drawTree(g, 2.2 * TILE, 3.3 * TILE);
-    drawTree(g, 3.8 * TILE, 3.5 * TILE);
-
-
-    /* --- See (unten-rechts) --- */
-
+    /* --- See (unten rechts) --- */
     g.fillStyle(0x3daee0, 0.7);
-    g.fillCircle(38 * TILE, 35 * TILE, TILE * 3);
-
+    g.fillCircle(40 * TILE, 42 * TILE, TILE * 2.5);
     g.fillStyle(0x5bc4eb, 0.3);
-    g.fillCircle(38 * TILE, 35 * TILE, TILE * 2);
+    g.fillCircle(40 * TILE, 42 * TILE, TILE * 1.5);
 }
 
 
 function drawRoadLines(g, x, y, w, h) {
-
-    g.fillStyle(0xffffff, 0.3);
-
-    var dashLen = 20;
-    var gapLen  = 15;
-    var cy      = y + h / 2 - 2;
-
+    g.fillStyle(0xffffff, 0.35);
+    var cy = y + h / 2 - 2;
     var cx = x + 10;
-
     while (cx < x + w - 10) {
-
-        g.fillRect(cx, cy, dashLen, 3);
-        cx += dashLen + gapLen;
+        g.fillRect(cx, cy, 18, 3);
+        cx += 32;
     }
 }
-
 
 function drawRoadLinesV(g, x, y, w, h) {
-
-    g.fillStyle(0xffffff, 0.3);
-
-    var dashLen = 20;
-    var gapLen  = 15;
-    var cx      = x + w / 2 - 2;
-
+    g.fillStyle(0xffffff, 0.35);
+    var cx = x + w / 2 - 2;
     var cy = y + 10;
-
     while (cy < y + h - 10) {
-
-        g.fillRect(cx, cy, 3, dashLen);
-        cy += dashLen + gapLen;
+        g.fillRect(cx, cy, 3, 18);
+        cy += 32;
     }
 }
 
 
-function drawHouse(g, scene, x, y, icon) {
+function drawHouse(g, x, y) {
 
-    var colors = [0xf5d76e, 0xf0c070, 0xe8b86d, 0xddc080];
+    var wallColors = [0xf5d76e, 0xf0c070, 0xe8b86d, 0xddc080, 0xf7e6b0];
+    var wall = wallColors[Math.floor(Math.random() * wallColors.length)];
 
-    var color = colors[
-        Math.floor(Math.random() * colors.length)
-    ];
+    g.fillStyle(wall, 1);
+    g.fillRect(x + 10, y + 24, 44, 36);
 
-    g.fillStyle(color, 1);
-    g.fillRect(x + 8, y + 22, 48, 38);
+    var roofColors = [0xc0392b, 0xe74c3c, 0x8e44ad, 0x2980b9, 0x27ae60];
+    var roof = roofColors[Math.floor(Math.random() * roofColors.length)];
 
-    var roofColors = [0xc0392b, 0xe74c3c, 0x8e44ad, 0x2980b9];
-
-    var roofColor = roofColors[
-        Math.floor(Math.random() * roofColors.length)
-    ];
-
-    g.fillStyle(roofColor, 1);
-
+    g.fillStyle(roof, 1);
     g.beginPath();
-    g.moveTo(x + 4, y + 24);
-    g.lineTo(x + 32, y + 4);
-    g.lineTo(x + 60, y + 24);
+    g.moveTo(x + 6, y + 26);
+    g.lineTo(x + 32, y + 6);
+    g.lineTo(x + 58, y + 26);
     g.closePath();
     g.fillPath();
 
@@ -708,16 +644,14 @@ function drawHouse(g, scene, x, y, icon) {
     g.fillRect(x + 26, y + 42, 12, 18);
 
     g.fillStyle(0x9debf3, 1);
-    g.fillRect(x + 12, y + 30, 10, 10);
-    g.fillRect(x + 42, y + 30, 10, 10);
+    g.fillRect(x + 14, y + 32, 9, 9);
+    g.fillRect(x + 41, y + 32, 9, 9);
 }
 
 
 function drawTree(g, x, y) {
-
     g.fillStyle(0x2d6a2e, 1);
     g.fillCircle(x, y, 14);
-
     g.fillStyle(0x1e4d20, 1);
     g.fillCircle(x - 5, y + 3, 10);
     g.fillCircle(x + 5, y + 3, 10);
@@ -729,46 +663,35 @@ function drawTree(g, x, y) {
    ========================================================= */
 
 function drawGridLines(scene) {
-
     var g = scene.add.graphics();
-
-    g.lineStyle(1, 0x000000, 0.06);
+    g.lineStyle(1, 0x000000, 0.05);
 
     for (var x = 0; x <= WORLD_W; x += TILE) {
-
         g.moveTo(x, 0);
         g.lineTo(x, WORLD_H);
     }
-
     for (var y = 0; y <= WORLD_H; y += TILE) {
-
         g.moveTo(0, y);
         g.lineTo(WORLD_W, y);
     }
-
     g.strokePath();
 }
 
 
 /* =========================================================
-   GEBÄUDE PLATZIEREN
+   GEBÄUDE
    ========================================================= */
 
 function placeBuildings(scene, player) {
 
     buildingSprites = [];
 
-
-    /* --- Spieler-Unternehmen (Mitte) --- */
-
+    /* --- Spieler-Unternehmen --- */
     var px = player.grid_x || Math.floor(COLS / 2);
     var py = player.grid_y || Math.floor(ROWS / 2) - 4;
 
     var playerBldg = createClickableBuilding(
-        scene,
-        px * TILE,
-        py * TILE,
-
+        scene, px * TILE, py * TILE,
         {
             icon:       "🏢",
             name:       player.player_name + "s Firma",
@@ -780,76 +703,55 @@ function placeBuildings(scene, player) {
             isPlayer:   true
         }
     );
-
     buildingSprites.push(playerBldg);
 
 
-    /* --- NPC-Gebaeude verstreut platzieren --- */
-
-    var npcBuildings = [
-
-        { icon: "🍕",  name: "Pizzeria Mario",      cat: "Restaurant",   income: 50,  owner: "NPC" },
-        { icon: "🛒",  name: "Supermarkt Fresh",    cat: "Laden",        income: 30,  owner: "NPC" },
-        { icon: "🔧",  name: "Werkstatt Braun",     cat: "Werkstatt",    income: 80,  owner: "NPC" },
-        { icon: "💼",  name: "Agentur Schmidt",     cat: "Agentur",      income: 120, owner: "NPC" },
-        { icon: "💻",  name: "TechStart GmbH",      cat: "Tech-Startup", income: 200, owner: "NPC" },
-        { icon: "🏨",  name: "Hotel Panorama",      cat: "Hotel",        income: 150, owner: "NPC" },
-        { icon: "🍕",  name: "Bella Napoli",        cat: "Restaurant",   income: 55,  owner: "NPC" },
-        { icon: "🛒",  name: "MarketKlein",         cat: "Laden",        income: 35,  owner: "NPC" },
-        { icon: "🔧",  name: "AutoService Max",     cat: "Werkstatt",    income: 85,  owner: "NPC" },
-        { icon: "💼",  name: "Beratung Plus",       cat: "Agentur",      income: 130, owner: "NPC" },
-        { icon: "💻",  name: "CodeFactory",         cat: "Tech-Startup", income: 210, owner: "NPC" },
-        { icon: "🏨",  name: "Grand Stay",          cat: "Hotel",        income: 160, owner: "NPC" },
+    /* --- NPC-Gebaeude --- */
+    var npcData = [
+        { icon: "🍕", name: "Pizzeria Mario",    cat: "Restaurant",   income: 50  },
+        { icon: "🛒", name: "Supermarkt Fresh",  cat: "Laden",        income: 30  },
+        { icon: "🔧", name: "Werkstatt Braun",   cat: "Werkstatt",    income: 80  },
+        { icon: "💼", name: "Agentur Schmidt",   cat: "Agentur",      income: 120 },
+        { icon: "💻", name: "TechStart GmbH",    cat: "Tech-Startup", income: 200 },
+        { icon: "🏨", name: "Hotel Panorama",    cat: "Hotel",        income: 150 },
+        { icon: "🍕", name: "Bella Napoli",      cat: "Restaurant",   income: 55  },
+        { icon: "🛒", name: "MarketKlein",       cat: "Laden",        income: 35  },
+        { icon: "🔧", name: "AutoService Max",   cat: "Werkstatt",    income: 85  },
+        { icon: "💼", name: "Beratung Plus",     cat: "Agentur",      income: 130 },
+        { icon: "💻", name: "CodeFactory",       cat: "Tech-Startup", income: 210 },
+        { icon: "🏨", name: "Grand Stay",        cat: "Hotel",        income: 160 },
     ];
 
-    var occupiedGrid = {};
+    var occupied = {};
+    occupied[px + "," + py] = true;
 
-    occupiedGrid[px + "," + py] = true;
-
-    var mainRoadX = Math.floor(COLS / 2) * TILE;
-    var riverY    = Math.floor(ROWS / 2) * TILE;
-
-    npcBuildings.forEach(function (b) {
+    npcData.forEach(function (b) {
 
         var tries = 0;
 
-        while (tries < 200) {
+        while (tries < 300) {
 
             var gx = Math.floor(Math.random() * (COLS - 4)) + 2;
-            var gy = Math.floor(Math.random() * (ROWS - 6)) + 2;
+            var gy = Math.floor(Math.random() * (ROWS - 8)) + 2;
 
-            var sx = gx * TILE;
+            if (occupied[gx + "," + gy]) { tries++; continue; }
+            if (isOnRoad(gx, gy)) { tries++; continue; }
+            if (Math.abs(gx * TILE - MAIN_ROAD_X) < TILE * 2) { tries++; continue; }
+
             var sy = gy * TILE;
+            if (sy >= RIVER_Y - TILE && sy <= RIVER_Y + TILE * 3) { tries++; continue; }
 
-            if (occupiedGrid[gx + "," + gy]) {
-                tries++;
-                continue;
-            }
-
-            if (Math.abs(sx - mainRoadX) < TILE * 3) {
-                tries++;
-                continue;
-            }
-
-            if (sy > riverY - TILE && sy < riverY + TILE * 3) {
-                tries++;
-                continue;
-            }
-
-            occupiedGrid[gx + "," + gy] = true;
+            occupied[gx + "," + gy] = true;
 
             var level = Math.floor(Math.random() * 5) + 1;
 
             createClickableBuilding(
-                scene,
-                sx,
-                sy,
-
+                scene, gx * TILE, gy * TILE,
                 {
                     icon:      b.icon,
                     name:      b.name,
                     category:  b.cat,
-                    ownerName: b.owner,
+                    ownerName: "Stadt",
                     income:    b.income * level,
                     level:     level,
                     maxLevel:  5,
@@ -867,89 +769,68 @@ function createClickableBuilding(scene, x, y, data) {
 
     var g = scene.add.graphics();
 
-    var baseColor;
+    var baseColor = data.isPlayer ? 0x075d68 : 0x3a6b5e;
 
-    if (data.isPlayer) {
-
-        baseColor = 0x075d68;
-
-    } else {
-
-        baseColor = 0x3a6b5e;
-    }
-
-
-    /* --- Gebaeude-Koerper --- */
-
+    /* Gebaeude */
     g.fillStyle(baseColor, 1);
     g.fillRect(x + 4, y + 18, 56, 42);
 
-
-    /* --- Dach --- */
-
+    /* Dach */
     g.fillStyle(0x55fff0, 1);
     g.fillRect(x + 4, y + 18, 56, 6);
 
-
-    /* --- Fenster --- */
-
+    /* Fenster */
     g.fillStyle(0xb8fff8, 0.8);
-
     g.fillRect(x + 10, y + 30, 12, 10);
     g.fillRect(x + 26, y + 30, 12, 10);
     g.fillRect(x + 42, y + 30, 12, 10);
 
-
-    /* --- Tuer --- */
-
+    /* Tuer */
     g.fillStyle(0x143b42, 1);
     g.fillRect(x + 26, y + 46, 12, 14);
 
+    /* Schild-Hintergrund fuer bessere Lesbarkeit */
+    var labelColor = data.isPlayer ? "#075d68" : "#3a6b5e";
 
-    /* --- Name & Icon (Text) --- */
+    var bg = scene.add.graphics();
+    var labelText = data.icon + " " + data.name;
+    var labelW = labelText.length * 8 + 16;
 
+    bg.fillStyle(
+        data.isPlayer ? 0x075d68 : 0x3a6b5e,
+        0.92
+    );
+    bg.fillRoundedRect(
+        x + 32 - labelW / 2,
+        y - 8,
+        labelW,
+        22,
+        4
+    );
+
+    /* Name + Icon */
     scene.add.text(
-        x - 4,
-        y - 10,
-        data.icon + " " + data.name,
-
-        {
-            fontSize:      "12px",
-            color:         "#ffffff",
-            backgroundColor: data.isPlayer
-                ? "#075d68"
-                : "#3a6b5e",
-            padding: {
-                left:   5,
-                right:  5,
-                top:    3,
-                bottom: 3
-            }
-        }
-    );
-
-
-    /* --- Interaktive Zone --- */
-
-    var hitZone = scene.add.zone(
         x + 32,
-        y + 32,
-        64,
-        64
-    );
+        y + 3,
+        labelText,
+        {
+            fontSize:   "14px",
+            fontStyle:  "bold",
+            color:      "#ffffff",
+            align:      "center"
+        }
+    ).setOrigin(0.5, 0.5);
 
+    /* Interaktive Zone */
+    var hitZone = scene.add.zone(x + 32, y + 32, 64, 64);
     hitZone.setInteractive(
         new Phaser.Geom.Rectangle(0, 0, 64, 64),
         Phaser.Geom.Rectangle.Contains
     );
-
     hitZone.buildingData = data;
-
     hitZone.on("pointerdown", function () {
-
         showInfoPanel(data);
     });
-
 
     return hitZone;
 }
@@ -962,58 +843,30 @@ function createClickableBuilding(scene, x, y, data) {
 function setupCamera(scene) {
 
     var c = scene.cameras.main;
-
     c.setBounds(0, 0, WORLD_W, WORLD_H);
 
-
-    /* --- Start-Position: Spieler in der Mitte --- */
-
     if (playerData) {
-
         var px = (playerData.grid_x || Math.floor(COLS / 2)) * TILE;
-        var py = (playerData.grid_y || Math.floor(ROWS / 2)) * TILE;
-
-        c.centerOn(
-            px + 32,
-            py + 32
-        );
+        var py = (playerData.grid_y || Math.floor(ROWS / 2) - 4) * TILE;
+        c.centerOn(px + 32, py + 32);
     }
 
-
-    /* --- Mausrad-Zoom --- */
-
-    scene.input.on("wheel", function (
-        pointer,
-        gameObjects,
-        deltaX,
-        deltaY
-    ) {
-
+    scene.input.on("wheel", function (pointer, gameObjects, deltaX, deltaY) {
         var newZoom = c.zoom - deltaY * cam.zoomSpeed;
-
-        newZoom = Math.max(cam.zoomMin,
-                   Math.min(cam.zoomMax, newZoom));
-
+        newZoom = Math.max(cam.zoomMin, Math.min(cam.zoomMax, newZoom));
         c.zoom = newZoom;
     });
 
-
-    /* --- Maus-Ziehen (linke Taste) --- */
-
     scene.input.on("pointerdown", function (pointer) {
-
         if (pointer.leftButtonDown()) {
-
             cam.dragging = true;
-            cam.lastX    = pointer.x;
-            cam.lastY    = pointer.y;
+            cam.lastX = pointer.x;
+            cam.lastY = pointer.y;
         }
     });
 
     scene.input.on("pointerup", function (pointer) {
-
         if (pointer.leftButtonReleased()) {
-
             cam.dragging = false;
         }
     });
@@ -1021,24 +874,6 @@ function setupCamera(scene) {
 
 
 function setupInput(scene) {
-
-    var canvas = scene.game.canvas;
-
-    canvas.addEventListener("keydown", function (e) {
-        keys[e.code] = true;
-    });
-
-    canvas.addEventListener("keyup", function (e) {
-        keys[e.code] = false;
-    });
-
-    window.addEventListener("keydown", function (e) {
-        keys[e.code] = true;
-    });
-
-    window.addEventListener("keyup", function (e) {
-        keys[e.code] = false;
-    });
 
     document.addEventListener("keydown", function (e) {
         keys[e.code] = true;
@@ -1055,16 +890,10 @@ function setupInput(scene) {
    ========================================================= */
 
 window.addEventListener("load", async function () {
-
     try {
-
         const { data: { session } } =
             await client.auth.getSession();
-
-        if (session) {
-            await loadGame();
-        }
-
+        if (session) await loadGame();
     } catch (err) {
         console.error("Session-Fehler:", err);
     }
@@ -1076,9 +905,7 @@ window.addEventListener("load", async function () {
    ========================================================= */
 
 window.addEventListener("resize", function () {
-
     if (game) {
-
         game.scale.resize(
             window.innerWidth,
             window.innerHeight - 62
