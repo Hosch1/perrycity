@@ -2,38 +2,52 @@
    PERRYCITY
    ========================================= */
 
-/*
-   HIER DEINE SUPABASE DATEN EINTRAGEN
-*/
+const SUPABASE_URL =
+    "DEINE_SUPABASE_URL";
 
-const SUPABASE_URL = "https://nrloacwgehhukzkgtoas.supabase.co";
-const SUPABASE_KEY = "sb_publishable_EUQuU4qxS8pPHuBCc7R_tg_6RXLtNN6";
-
-
-/*
-   SUPABASE VERBINDUNG
-*/
-
-const supabaseClient = supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_KEY
-);
+const SUPABASE_KEY =
+    "DEIN_PUBLISHABLE_KEY";
 
 
-/*
-   SPIELER
-*/
+const supabaseClient =
+    supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    );
+
 
 let currentPlayer = null;
-
 let playerData = null;
+let game = null;
+
+
+/* =========================================
+   LOGIN-NAME
+   ========================================= */
+
+function normalizeName(name) {
+
+    return name
+        .trim()
+        .toLowerCase();
+}
 
 
 /*
-   PHASER
+   Supabase braucht intern eine
+   technische E-Mail-Adresse.
+
+   Der Spieler sieht diese niemals.
 */
 
-let game = null;
+function internalLogin(name) {
+
+    return (
+        normalizeName(name)
+        .replace(/[^a-z0-9_-]/g, "")
+        + "@perrycity.game"
+    );
+}
 
 
 /* =========================================
@@ -43,22 +57,34 @@ let game = null;
 async function register() {
 
     const playerName =
-        document.getElementById("player-name").value.trim();
-
-    const email =
-        document.getElementById("email").value.trim();
+        document
+            .getElementById("player-name")
+            .value
+            .trim();
 
     const password =
-        document.getElementById("password").value;
+        document
+            .getElementById("password")
+            .value;
 
     const message =
-        document.getElementById("message");
+        document
+            .getElementById("message");
 
 
-    if (!playerName || !email || !password) {
+    if (!playerName || !password) {
 
         message.textContent =
-            "Bitte alle Felder ausfüllen.";
+            "Bitte Spielername und Passwort eingeben.";
+
+        return;
+    }
+
+
+    if (playerName.length < 3) {
+
+        message.textContent =
+            "Der Spielername muss mindestens 3 Zeichen haben.";
 
         return;
     }
@@ -73,19 +99,91 @@ async function register() {
     }
 
 
+    if (
+        !/^[a-zA-Z0-9_-]+$/.test(playerName)
+    ) {
+
+        message.textContent =
+            "Nur Buchstaben, Zahlen, _ und - sind erlaubt.";
+
+        return;
+    }
+
+
+    const loginName =
+        normalizeName(playerName);
+
+
+    /*
+       Prüfen, ob der Name bereits existiert
+    */
+
+    const {
+        data: existingPlayer,
+        error: existingError
+    } = await supabaseClient
+        .from("players")
+        .select("id")
+        .eq("login_name", loginName)
+        .maybeSingle();
+
+
+    if (existingError) {
+
+        console.error(existingError);
+
+        message.textContent =
+            "Fehler bei der Prüfung des Spielernamens.";
+
+        return;
+    }
+
+
+    if (existingPlayer) {
+
+        message.textContent =
+            "Dieser Spielername ist bereits vergeben.";
+
+        return;
+    }
+
+
     message.textContent =
-        "Account wird erstellt...";
+        "Spieler wird erstellt...";
+
+
+    /*
+       Interne Auth-ID
+    */
+
+    const internalEmail =
+        internalLogin(playerName);
 
 
     const {
         data,
         error
-    } = await supabaseClient.auth.signUp({
+    } =
+        await supabaseClient.auth.signUp({
 
-        email: email,
-        password: password
+            email:
+                internalEmail,
 
-    });
+            password:
+                password,
+
+            options: {
+
+                data: {
+
+                    player_name:
+                        playerName
+
+                }
+
+            }
+
+        });
 
 
     if (error) {
@@ -102,47 +200,42 @@ async function register() {
     if (!data.user) {
 
         message.textContent =
-            "Registrierung konnte nicht abgeschlossen werden.";
+            "Spieler konnte nicht erstellt werden.";
 
         return;
     }
 
 
     /*
-       Wenn E-Mail-Bestätigung aktiviert ist,
-       muss der Benutzer erst seine E-Mail bestätigen.
-    */
-
-    if (!data.session) {
-
-        message.textContent =
-            "Account erstellt! Bitte bestätige deine E-Mail und logge dich danach ein.";
-
-        return;
-    }
-
-
-    /*
-       Spielerprofil speichern
+       Spielerdaten speichern
     */
 
     const {
         error: playerError
-    } = await supabaseClient
-        .from("players")
-        .insert({
+    } =
+        await supabaseClient
+            .from("players")
+            .insert({
 
-            id: data.user.id,
+                id:
+                    data.user.id,
 
-            player_name: playerName,
+                player_name:
+                    playerName,
 
-            money: 10000,
+                login_name:
+                    loginName,
 
-            x: 400,
+                money:
+                    10000,
 
-            y: 300
+                x:
+                    400,
 
-        });
+                y:
+                    300
+
+            });
 
 
     if (playerError) {
@@ -150,7 +243,7 @@ async function register() {
         console.error(playerError);
 
         message.textContent =
-            "Account erstellt, aber Spielerprofil konnte nicht gespeichert werden.";
+            "Spieler wurde erstellt, aber das Profil konnte nicht gespeichert werden.";
 
         return;
     }
@@ -161,25 +254,31 @@ async function register() {
 
 
 /* =========================================
-   LOGIN
+   EINLOGGEN
    ========================================= */
 
 async function login() {
 
-    const email =
-        document.getElementById("email").value.trim();
+    const playerName =
+        document
+            .getElementById("player-name")
+            .value
+            .trim();
 
     const password =
-        document.getElementById("password").value;
+        document
+            .getElementById("password")
+            .value;
 
     const message =
-        document.getElementById("message");
+        document
+            .getElementById("message");
 
 
-    if (!email || !password) {
+    if (!playerName || !password) {
 
         message.textContent =
-            "Bitte E-Mail und Passwort eingeben.";
+            "Bitte Spielername und Passwort eingeben.";
 
         return;
     }
@@ -189,16 +288,24 @@ async function login() {
         "Login...";
 
 
+    const internalEmail =
+        internalLogin(playerName);
+
+
     const {
         data,
         error
-    } = await supabaseClient.auth.signInWithPassword({
+    } =
+        await supabaseClient.auth
+            .signInWithPassword({
 
-        email: email,
+                email:
+                    internalEmail,
 
-        password: password
+                password:
+                    password
 
-    });
+            });
 
 
     if (error) {
@@ -206,7 +313,7 @@ async function login() {
         console.error(error);
 
         message.textContent =
-            error.message;
+            "Spielername oder Passwort ist falsch.";
 
         return;
     }
@@ -235,7 +342,9 @@ async function loadGame() {
         data: {
             user
         }
-    } = await supabaseClient.auth.getUser();
+    } =
+        await supabaseClient.auth
+            .getUser();
 
 
     if (!user) {
@@ -243,47 +352,60 @@ async function loadGame() {
     }
 
 
-    currentPlayer = user;
+    currentPlayer =
+        user;
 
 
     const {
         data,
         error
-    } = await supabaseClient
-        .from("players")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+    } =
+        await supabaseClient
+            .from("players")
+            .select("*")
+            .eq("id", user.id)
+            .single();
 
 
     if (error) {
 
         console.error(error);
 
-        document.getElementById("message").textContent =
+        document
+            .getElementById("message")
+            .textContent =
             "Spielerprofil konnte nicht geladen werden.";
 
         return;
     }
 
 
-    playerData = data;
+    playerData =
+        data;
 
 
-    document.getElementById("display-name")
-        .textContent = data.player_name;
+    document
+        .getElementById("display-name")
+        .textContent =
+        data.player_name;
 
 
-    document.getElementById("money")
-        .textContent = formatMoney(data.money);
+    document
+        .getElementById("money")
+        .textContent =
+        formatMoney(data.money);
 
 
-    document.getElementById("login-screen")
-        .style.display = "none";
+    document
+        .getElementById("login-screen")
+        .style.display =
+        "none";
 
 
-    document.getElementById("game-screen")
-        .style.display = "block";
+    document
+        .getElementById("game-screen")
+        .style.display =
+        "block";
 
 
     startGame(data);
@@ -291,30 +413,32 @@ async function loadGame() {
 
 
 /* =========================================
-   GELD FORMATIEREN
+   GELD
    ========================================= */
 
 function formatMoney(amount) {
 
-    return new Intl.NumberFormat("de-DE")
-        .format(amount);
+    return new Intl.NumberFormat(
+        "de-DE"
+    ).format(amount);
 }
 
 
 /* =========================================
-   ABMELDEN
+   LOGOUT
    ========================================= */
 
 async function logout() {
 
-    await supabaseClient.auth.signOut();
+    await supabaseClient.auth
+        .signOut();
 
     location.reload();
 }
 
 
 /* =========================================
-   SPIEL STARTEN
+   SPIEL
    ========================================= */
 
 function startGame(player) {
@@ -329,30 +453,40 @@ function startGame(player) {
 
     const config = {
 
-        type: Phaser.AUTO,
+        type:
+            Phaser.AUTO,
 
-        parent: "game",
+        parent:
+            "game",
 
-        width: window.innerWidth,
+        width:
+            window.innerWidth,
 
-        height: window.innerHeight - 60,
+        height:
+            window.innerHeight - 62,
 
-        backgroundColor: "#79b95b",
+        backgroundColor:
+            "#55c7b9",
 
         scene: {
 
-            create: function () {
+            create:
+                function () {
 
-                createWorld(this, player);
+                    createWorld(
+                        this,
+                        player
+                    );
 
-            }
+                }
 
         }
 
     };
 
 
-    game = new Phaser.Game(config);
+    game =
+        new Phaser.Game(config);
 }
 
 
@@ -360,22 +494,38 @@ function startGame(player) {
    WELT
    ========================================= */
 
-function createWorld(scene, player) {
-
-    /*
-       Hintergrund
-    */
+function createWorld(
+    scene,
+    player
+) {
 
     const graphics =
         scene.add.graphics();
 
 
     /*
-       Gras
+       Wasser/Aqua-Hintergrund
     */
 
     graphics.fillStyle(
-        0x79b95b,
+        0x6dd5c7,
+        1
+    );
+
+    graphics.fillRect(
+        0,
+        0,
+        window.innerWidth,
+        window.innerHeight
+    );
+
+
+    /*
+       Stadtfläche
+    */
+
+    graphics.fillStyle(
+        0x82c96c,
         1
     );
 
@@ -392,7 +542,7 @@ function createWorld(scene, player) {
     */
 
     graphics.fillStyle(
-        0x555555,
+        0x555f63,
         1
     );
 
@@ -400,7 +550,7 @@ function createWorld(scene, player) {
         0,
         350,
         window.innerWidth,
-        80
+        75
     );
 
     graphics.fillRect(
@@ -408,6 +558,23 @@ function createWorld(scene, player) {
         0,
         80,
         window.innerHeight
+    );
+
+
+    /*
+       Wasserkanal
+    */
+
+    graphics.fillStyle(
+        0x3bc7d4,
+        1
+    );
+
+    graphics.fillRect(
+        0,
+        600,
+        window.innerWidth,
+        60
     );
 
 
@@ -429,33 +596,43 @@ function createWorld(scene, player) {
 
     createCompany(
         scene,
+
         player.x || 400,
+
         player.y || 300,
+
         player.player_name
     );
 
 
     /*
-       Überschrift
+       Titel
     */
 
     scene.add.text(
 
         20,
+
         20,
 
         "Perrycity",
 
         {
-            fontSize: "30px",
 
-            color: "#ffffff",
+            fontSize:
+                "30px",
 
-            fontStyle: "bold",
+            color:
+                "#ffffff",
 
-            stroke: "#000000",
+            fontStyle:
+                "bold",
 
-            strokeThickness: 5
+            stroke:
+                "#064c55",
+
+            strokeThickness:
+                6
 
         }
 
@@ -467,18 +644,18 @@ function createWorld(scene, player) {
    HAUS
    ========================================= */
 
-function createHouse(scene, x, y) {
+function createHouse(
+    scene,
+    x,
+    y
+) {
 
     const graphics =
         scene.add.graphics();
 
 
-    /*
-       Haus
-    */
-
     graphics.fillStyle(
-        0xf1c40f,
+        0xf5d76e,
         1
     );
 
@@ -490,12 +667,8 @@ function createHouse(scene, x, y) {
     );
 
 
-    /*
-       Dach
-    */
-
     graphics.fillStyle(
-        0xc0392b,
+        0x0b8f91,
         1
     );
 
@@ -522,10 +695,6 @@ function createHouse(scene, x, y) {
     graphics.fillPath();
 
 
-    /*
-       Tür
-    */
-
     graphics.fillStyle(
         0x8e5a2c,
         1
@@ -539,12 +708,8 @@ function createHouse(scene, x, y) {
     );
 
 
-    /*
-       Fenster
-    */
-
     graphics.fillStyle(
-        0x8fd3ff,
+        0x9debf3,
         1
     );
 
@@ -580,11 +745,11 @@ function createCompany(
 
 
     /*
-       Gebäude
+       Hauptgebäude
     */
 
     graphics.fillStyle(
-        0x3498db,
+        0x075d68,
         1
     );
 
@@ -597,11 +762,11 @@ function createCompany(
 
 
     /*
-       Dach
+       Aqua-Akzent
     */
 
     graphics.fillStyle(
-        0x1f5f8b,
+        0x55fff0,
         1
     );
 
@@ -609,7 +774,7 @@ function createCompany(
         x,
         y,
         130,
-        15
+        12
     );
 
 
@@ -618,7 +783,7 @@ function createCompany(
     */
 
     graphics.fillStyle(
-        0xbfe8ff,
+        0xb8fff8,
         1
     );
 
@@ -650,7 +815,7 @@ function createCompany(
     */
 
     graphics.fillStyle(
-        0x6b3e26,
+        0x143b42,
         1
     );
 
@@ -663,29 +828,40 @@ function createCompany(
 
 
     /*
-       Firmenname
+       Name
     */
 
     scene.add.text(
 
         x,
+
         y - 30,
 
         ownerName,
 
         {
-            fontSize: "18px",
 
-            color: "#ffffff",
+            fontSize:
+                "18px",
 
-            backgroundColor: "#222222",
+            color:
+                "#ffffff",
+
+            backgroundColor:
+                "#075d68",
 
             padding: {
-                left: 5,
-                right: 5,
-                top: 3,
-                bottom: 3
+
+                left: 7,
+
+                right: 7,
+
+                top: 4,
+
+                bottom: 4
+
             }
+
         }
 
     );
@@ -693,7 +869,7 @@ function createCompany(
 
 
 /* =========================================
-   AUTOMATISCHER LOGIN-CHECK
+   AUTOMATISCHER LOGIN
    ========================================= */
 
 window.addEventListener(
@@ -704,7 +880,10 @@ window.addEventListener(
             data: {
                 session
             }
-        } = await supabaseClient.auth.getSession();
+        } =
+            await supabaseClient
+                .auth
+                .getSession();
 
 
         if (session) {
@@ -727,8 +906,11 @@ window.addEventListener(
         if (game) {
 
             game.scale.resize(
+
                 window.innerWidth,
-                window.innerHeight - 60
+
+                window.innerHeight - 62
+
             );
 
         }
