@@ -14,23 +14,22 @@
 
 <body>
 
-    <!-- LOGIN -->
     <div id="login-screen">
 
-        <h1>🏙️ Perrycity</h1>
+        <div class="logo">
+            <div class="logo-city">🏙️</div>
+            <h1>Perrycity</h1>
+        </div>
 
-        <p>Deine Stadt. Dein Unternehmen. Deine Welt.</p>
+        <p class="subtitle">
+            Deine Stadt. Dein Unternehmen. Deine Welt.
+        </p>
 
         <input
             id="player-name"
             type="text"
             placeholder="Spielername"
-        >
-
-        <input
-            id="email"
-            type="email"
-            placeholder="E-Mail"
+            maxlength="20"
         >
 
         <input
@@ -39,9 +38,16 @@
             placeholder="Passwort"
         >
 
-        <div>
-            <button onclick="register()">Registrieren</button>
-            <button onclick="login()">Einloggen</button>
+        <div class="login-buttons">
+
+            <button onclick="register()">
+                Registrieren
+            </button>
+
+            <button onclick="login()">
+                Einloggen
+            </button>
+
         </div>
 
         <p id="message"></p>
@@ -49,12 +55,11 @@
     </div>
 
 
-    <!-- SPIEL -->
     <div id="game-screen">
 
         <div id="topbar">
 
-            <div>
+            <div class="brand">
                 🏙️ <strong>Perrycity</strong>
             </div>
 
@@ -63,12 +68,15 @@
                 <strong id="display-name">-</strong>
             </div>
 
-            <div>
+            <div class="money-box">
                 💰
                 <strong id="money">0</strong> €
             </div>
 
-            <button onclick="logout()">
+            <button
+                class="logout-button"
+                onclick="logout()"
+            >
                 Abmelden
             </button>
 
