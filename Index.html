@@ -3,14 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Perrycity</title>
+
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
 </head>
 
 <body>
 
-    <h1>🏙️ Willkommen in Perrycity</h1>
+    <!-- LOGIN -->
+    <div id="login-screen">
 
-    <p>Das Wirtschaftsspiel entsteht gerade!</p>
+        <h1>🏙️ Perrycity</h1>
+
+        <p>Deine Stadt. Dein Unternehmen. Deine Welt.</p>
+
+        <input
+            id="player-name"
+            type="text"
+            placeholder="Spielername"
+        >
+
+        <input
+            id="email"
+            type="email"
+            placeholder="E-Mail"
+        >
+
+        <input
+            id="password"
+            type="password"
+            placeholder="Passwort"
+        >
+
+        <div>
+            <button onclick="register()">Registrieren</button>
+            <button onclick="login()">Einloggen</button>
+        </div>
+
+        <p id="message"></p>
+
+    </div>
+
+
+    <!-- SPIEL -->
+    <div id="game-screen">
+
+        <div id="topbar">
+
+            <div>
+                🏙️ <strong>Perrycity</strong>
+            </div>
+
+            <div>
+                Spieler:
+                <strong id="display-name">-</strong>
+            </div>
+
+            <div>
+                💰
+                <strong id="money">0</strong> €
+            </div>
+
+            <button onclick="logout()">
+                Abmelden
+            </button>
+
+        </div>
+
+        <div id="game"></div>
+
+    </div>
+
+
+    <script src="game.js"></script>
 
 </body>
 </html>
