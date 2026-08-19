@@ -1,6 +1,6 @@
 /* =========================================================
-   PERRYCITY — PHASE 1 (gefixt)
-   Kamera, Grid, Karte, Klick-System, Info-Panel
+   PERRYCITY — PHASE 1 (final)
+   Kamera, Grid, Karte, Gebäude, Sounds, Multiplayer
    ========================================================= */
 
 /* ---------- SUPABASE ---------- */
@@ -17,60 +17,44 @@ const client = supabase.createClient(
 );
 
 
-/* ---------- WELT-KONSTANTEN ---------- */
+/* ---------- WELT ---------- */
 
 const WORLD_W = 3600;
 const WORLD_H = 3600;
 const TILE    = 64;
-
-const COLS = WORLD_W / TILE;
-const ROWS = WORLD_H / TILE;
-
-
-/* ---------- STRASSEN-POSITIONEN (in Tiles) ---------- */
+const COLS    = WORLD_W / TILE;
+const ROWS    = WORLD_H / TILE;
 
 const MAIN_RD_COL = 24;
 const MAIN_RD_ROW = 24;
 const RIVER_ROW   = 29;
-
-const SIDE_COLS   = [4, 10, 16, 20, 30, 36, 42];
+const SIDE_COLS       = [4, 10, 16, 20, 30, 36, 42];
 const CROSS_ROWS_TOP  = [7, 14, 20];
 const CROSS_ROWS_BOT  = [34, 40, 46];
 
 function isOnRoad(gx, gy) {
-
     if (gy === MAIN_RD_ROW) return true;
     if (gx === MAIN_RD_COL) return true;
-
     for (var i = 0; i < SIDE_COLS.length; i++) {
         if (gx === SIDE_COLS[i]) return true;
     }
-
     for (var j = 0; j < CROSS_ROWS_TOP.length; j++) {
         if (gy === CROSS_ROWS_TOP[j]) return true;
     }
     for (var j = 0; j < CROSS_ROWS_BOT.length; j++) {
         if (gy === CROSS_ROWS_BOT[j]) return true;
     }
-
     if (gy === RIVER_ROW || gy === RIVER_ROW + 1) return true;
-
     return false;
 }
 
 
-/* ---------- SPIELVARIABLEN ---------- */
+/* ---------- STATE ---------- */
 
 let currentPlayer = null;
 let playerData    = null;
 let game          = null;
-
 let sceneRef      = null;
-let mapGraphics   = null;
-let buildingSprites = [];
-
-
-/* ---------- KAMERA-STATE ---------- */
 
 const cam = {
     speed:     6,
@@ -82,10 +66,54 @@ const cam = {
     lastY:     0
 };
 
-
-/* ---------- STEUERUNG ---------- */
-
 const keys = {};
+
+let buildingContainers = [];
+let selectedBuilding   = null;
+let refreshInterval    = null;
+
+
+/* =========================================================
+   SOUND (Web Audio API – keine externen Dateien)
+   ========================================================= */
+
+var audioCtx = null;
+
+function ensureAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+}
+
+function playClickSound() {
+    ensureAudio();
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.1);
+}
+
+function playSelectSound() {
+    ensureAudio();
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(500, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(900, audioCtx.currentTime + 0.06);
+    gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.12);
+}
 
 
 /* =========================================================
@@ -97,16 +125,11 @@ function normalizeName(name) {
 }
 
 function internalLogin(name) {
-    return (
-        normalizeName(name)
-            .replace(/[^a-z0-9_-]/g, "")
-        + "@perrycity.auth"
-    );
+    return normalizeName(name).replace(/[^a-z0-9_-]/g, "") + "@perrycity.auth";
 }
 
 function formatMoney(amount) {
-    return new Intl.NumberFormat("de-DE")
-        .format(amount);
+    return new Intl.NumberFormat("de-DE").format(amount);
 }
 
 
@@ -116,44 +139,21 @@ function formatMoney(amount) {
 
 function showInfoPanel(data) {
 
-    const panel  = document.getElementById("info-panel");
-    const icon   = document.getElementById("info-icon");
-    const name   = document.getElementById("info-name");
-    const type   = document.getElementById("info-type");
-    const stats  = document.getElementById("info-stats");
-    const owner  = document.getElementById("info-owner");
+    document.getElementById("info-icon").textContent  = data.icon  || "🏢";
+    document.getElementById("info-name").textContent  = data.name  || "Gebäude";
+    document.getElementById("info-type").textContent  = data.category || "";
+    document.getElementById("info-owner").textContent = data.ownerName || "-";
 
-    icon.textContent  = data.icon  || "🏢";
-    name.textContent  = data.name  || "Unbekanntes Gebäude";
-    type.textContent  = data.category || "";
-    owner.textContent = data.ownerName || "-";
-
-    let statsHTML = "";
-
+    var html = "";
     if (data.income !== undefined) {
-        statsHTML += '<div class="info-stat-row">' +
-            '<span class="info-stat-label">Einkommen</span>' +
-            '<span class="info-stat-value">' + formatMoney(data.income) + ' €/min</span>' +
-            '</div>';
+        html += '<div class="info-stat-row"><span class="info-stat-label">Einkommen</span><span class="info-stat-value">' + formatMoney(data.income) + ' €/min</span></div>';
     }
-
     if (data.level !== undefined) {
-        statsHTML += '<div class="info-stat-row">' +
-            '<span class="info-stat-label">Stufe</span>' +
-            '<span class="info-stat-value">' + data.level + ' / ' + (data.maxLevel || 5) + '</span>' +
-            '</div>';
+        html += '<div class="info-stat-row"><span class="info-stat-label">Stufe</span><span class="info-stat-value">' + data.level + ' / ' + (data.maxLevel || 5) + '</span></div>';
     }
+    document.getElementById("info-stats").innerHTML = html;
 
-    if (data.population !== undefined) {
-        statsHTML += '<div class="info-stat-row">' +
-            '<span class="info-stat-label">Einwohner</span>' +
-            '<span class="info-stat-value">' + data.population + '</span>' +
-            '</div>';
-    }
-
-    stats.innerHTML = statsHTML;
-
-    panel.classList.remove("hidden");
+    document.getElementById("info-panel").classList.remove("hidden");
 }
 
 function closeInfoPanel() {
@@ -167,114 +167,51 @@ function closeInfoPanel() {
 
 async function register() {
 
-    const nameEl = document.getElementById("player-name");
-    const passEl = document.getElementById("password");
-    const msgEl  = document.getElementById("message");
+    var nameEl = document.getElementById("player-name");
+    var passEl = document.getElementById("password");
+    var msgEl  = document.getElementById("message");
+    var playerName = nameEl.value.trim();
+    var password   = passEl.value;
 
-    if (!nameEl || !passEl) return;
+    if (!playerName || !password) { msgEl.textContent = "Bitte Spielername und Passwort eingeben."; return; }
+    if (playerName.length < 3) { msgEl.textContent = "Mind. 3 Zeichen."; return; }
+    if (playerName.length > 20) { msgEl.textContent = "Max. 20 Zeichen."; return; }
+    if (password.length < 6) { msgEl.textContent = "Passwort mind. 6 Zeichen."; return; }
+    if (!/^[a-zA-Z0-9_-]+$/.test(playerName)) { msgEl.textContent = "Nur Buchstaben, Zahlen, _ und -."; return; }
 
-    const playerName = nameEl.value.trim();
-    const password   = passEl.value;
-
-    if (!playerName || !password) {
-        msgEl.textContent = "Bitte Spielername und Passwort eingeben.";
-        return;
-    }
-
-    if (playerName.length < 3) {
-        msgEl.textContent = "Der Spielername muss mindestens 3 Zeichen haben.";
-        return;
-    }
-
-    if (playerName.length > 20) {
-        msgEl.textContent = "Der Spielername darf höchstens 20 Zeichen haben.";
-        return;
-    }
-
-    if (password.length < 6) {
-        msgEl.textContent = "Das Passwort muss mindestens 6 Zeichen haben.";
-        return;
-    }
-
-    if (!/^[a-zA-Z0-9_-]+$/.test(playerName)) {
-        msgEl.textContent = "Erlaubt sind nur Buchstaben, Zahlen, _ und -.";
-        return;
-    }
-
-    const loginName = normalizeName(playerName);
-
+    var loginName = normalizeName(playerName);
     msgEl.textContent = "Spieler wird erstellt...";
 
     try {
+        var { data: existing } = await client.from("players").select("id").eq("login_name", loginName).maybeSingle();
+        if (existing) { msgEl.textContent = "Name bereits vergeben."; return; }
 
-        const { data: existing, error: exErr } = await client
-            .from("players")
-            .select("id")
-            .eq("login_name", loginName)
-            .maybeSingle();
+        var { data: authData, error: authErr } = await client.auth.signUp({
+            email: internalLogin(playerName),
+            password: password,
+            options: { data: { player_name: playerName } }
+        });
 
-        if (exErr) {
-            msgEl.textContent = "Fehler bei der Namensprüfung.";
-            return;
-        }
+        if (authErr) { msgEl.textContent = authErr.message; return; }
+        if (!authData.user) { msgEl.textContent = "Account konnte nicht erstellt werden."; return; }
+        if (!authData.session) { msgEl.textContent = "Account erstellt. Confirm email muss aus sein."; return; }
 
-        if (existing) {
-            msgEl.textContent = "Dieser Spielername ist bereits vergeben.";
-            return;
-        }
+        var spawnX = Math.floor(COLS / 2);
+        var spawnY = Math.floor(ROWS / 2) - 5;
 
-        const internalEmail = internalLogin(playerName);
+        var { error: pErr } = await client.from("players").insert({
+            id: authData.user.id, player_name: playerName, login_name: loginName,
+            money: 10000, grid_x: spawnX, grid_y: spawnY
+        });
 
-        const { data: authData, error: authErr } =
-            await client.auth.signUp({
-                email:    internalEmail,
-                password: password,
-                options: {
-                    data: { player_name: playerName }
-                }
-            });
-
-        if (authErr) {
-            msgEl.textContent = authErr.message;
-            return;
-        }
-
-        if (!authData.user) {
-            msgEl.textContent = "Spieler konnte nicht erstellt werden.";
-            return;
-        }
-
-        if (!authData.session) {
-            msgEl.textContent = "Account erstellt. 'Confirm email' muss in Supabase aus sein.";
-            return;
-        }
-
-        const spawnX = Math.floor(COLS / 2);
-        const spawnY = Math.floor(ROWS / 2) - 5;
-
-        const { error: pErr } = await client
-            .from("players")
-            .insert({
-                id:          authData.user.id,
-                player_name: playerName,
-                login_name:  loginName,
-                money:       10000,
-                grid_x:      spawnX,
-                grid_y:      spawnY
-            });
-
-        if (pErr) {
-            msgEl.textContent = "Profil konnte nicht gespeichert werden.";
-            return;
-        }
+        if (pErr) { msgEl.textContent = "Profil-Fehler."; return; }
 
         msgEl.textContent = "Willkommen in Perrycity!";
-
         await loadGame();
 
     } catch (err) {
-        console.error("Registrierungsfehler:", err);
-        msgEl.textContent = "Ein unerwarteter Fehler ist aufgetreten.";
+        console.error(err);
+        msgEl.textContent = "Unerwarteter Fehler.";
     }
 }
 
@@ -285,45 +222,28 @@ async function register() {
 
 async function login() {
 
-    const nameEl = document.getElementById("player-name");
-    const passEl = document.getElementById("password");
-    const msgEl  = document.getElementById("message");
+    var nameEl = document.getElementById("player-name");
+    var passEl = document.getElementById("password");
+    var msgEl  = document.getElementById("message");
+    var playerName = nameEl.value.trim();
+    var password   = passEl.value;
 
-    const playerName = nameEl.value.trim();
-    const password   = passEl.value;
-
-    if (!playerName || !password) {
-        msgEl.textContent = "Bitte Spielername und Passwort eingeben.";
-        return;
-    }
+    if (!playerName || !password) { msgEl.textContent = "Bitte Spielername und Passwort eingeben."; return; }
 
     msgEl.textContent = "Login...";
 
     try {
+        var { data, error } = await client.auth.signInWithPassword({
+            email: internalLogin(playerName), password: password
+        });
 
-        const internalEmail = internalLogin(playerName);
-
-        const { data, error } =
-            await client.auth.signInWithPassword({
-                email:    internalEmail,
-                password: password
-            });
-
-        if (error) {
-            msgEl.textContent = "Spielername oder Passwort ist falsch.";
-            return;
-        }
-
-        if (!data.user) {
-            msgEl.textContent = "Login fehlgeschlagen.";
-            return;
-        }
+        if (error) { msgEl.textContent = "Name oder Passwort falsch."; return; }
+        if (!data.user) { msgEl.textContent = "Login fehlgeschlagen."; return; }
 
         await loadGame();
-
     } catch (err) {
-        console.error("Login-Fehler:", err);
-        msgEl.textContent = "Ein unerwarteter Fehler ist aufgetreten.";
+        console.error(err);
+        msgEl.textContent = "Unerwarteter Fehler.";
     }
 }
 
@@ -333,53 +253,26 @@ async function login() {
    ========================================================= */
 
 async function loadGame() {
-
     try {
-
-        const { data: { user } } =
-            await client.auth.getUser();
-
+        var { data: { user } } = await client.auth.getUser();
         if (!user) return;
-
         currentPlayer = user;
 
-        const { data, error } = await client
-            .from("players")
-            .select("*")
-            .eq("id", user.id)
-            .single();
-
-        if (error) {
-            console.error("Lade-Fehler:", error);
-            document.getElementById("message").textContent =
-                "Profil konnte nicht geladen werden.";
-            return;
-        }
+        var { data, error } = await client.from("players").select("*").eq("id", user.id).single();
+        if (error) { console.error(error); return; }
 
         playerData = data;
-
-        document.getElementById("display-name").textContent =
-            data.player_name;
-
-        document.getElementById("money").textContent =
-            formatMoney(data.money);
-
+        document.getElementById("display-name").textContent = data.player_name;
+        document.getElementById("money").textContent = formatMoney(data.money);
         document.getElementById("login-screen").style.display = "none";
         document.getElementById("game-screen").style.display  = "block";
 
         startGame(data);
-
-    } catch (err) {
-        console.error("Fehler beim Laden:", err);
-    }
+    } catch (err) { console.error(err); }
 }
 
-
-/* =========================================================
-   LOGOUT
-   ========================================================= */
-
 async function logout() {
+    if (refreshInterval) clearInterval(refreshInterval);
     await client.auth.signOut();
     location.reload();
 }
@@ -390,42 +283,35 @@ async function logout() {
    ========================================================= */
 
 function startGame(player) {
+    if (game) { game.destroy(true); game = null; }
 
-    if (game) {
-        game.destroy(true);
-        game = null;
-    }
-
-    const config = {
-
+    game = new Phaser.Game({
         type: Phaser.AUTO,
-
         parent: "game",
-
-        width:  window.innerWidth,
+        width: window.innerWidth,
         height: window.innerHeight - 62,
-
         backgroundColor: "#6db56d",
-
         scene: {
-
             create: function () {
                 sceneRef = this;
                 createWorld(this, player);
             },
-
             update: function () {
                 updateCamera(this);
             }
         }
-    };
-
-    game = new Phaser.Game(config);
+    });
 
     setTimeout(function () {
-        var hint = document.getElementById("controls-hint");
-        if (hint) hint.classList.add("fade-out");
+        var h = document.getElementById("controls-hint");
+        if (h) h.classList.add("fade-out");
     }, 6000);
+
+    /* Auto-Refresh alle 10 Sekunden */
+    if (refreshInterval) clearInterval(refreshInterval);
+    refreshInterval = setInterval(function () {
+        if (sceneRef) refreshBuildings(sceneRef, player);
+    }, 10000);
 }
 
 
@@ -434,11 +320,8 @@ function startGame(player) {
    ========================================================= */
 
 function updateCamera(scene) {
-
     var c = scene.cameras.main;
-
-    var dx = 0;
-    var dy = 0;
+    var dx = 0, dy = 0;
 
     if (keys["KeyA"] || keys["ArrowLeft"])  dx -= 1;
     if (keys["KeyD"] || keys["ArrowRight"]) dx += 1;
@@ -451,188 +334,118 @@ function updateCamera(scene) {
         c.scrollY += (dy / len) * cam.speed / c.zoom;
     }
 
-    var pointer = scene.input.activePointer;
-
+    var p = scene.input.activePointer;
     if (cam.dragging) {
-        var diffX = cam.lastX - pointer.x;
-        var diffY = cam.lastY - pointer.y;
-        c.scrollX += diffX / c.zoom;
-        c.scrollY += diffY / c.zoom;
-        cam.lastX = pointer.x;
-        cam.lastY = pointer.y;
+        c.scrollX += (cam.lastX - p.x) / c.zoom;
+        c.scrollY += (cam.lastY - p.y) / c.zoom;
+        cam.lastX = p.x;
+        cam.lastY = p.y;
     }
 }
 
 
 /* =========================================================
-   WELT ERSTELLEN
+   WELT
    ========================================================= */
 
 function createWorld(scene, player) {
-
     drawBaseMap(scene);
     drawGridLines(scene);
     setupCamera(scene);
     setupInput(scene);
-
     placeBuildings(scene, player);
 }
 
 
 /* =========================================================
-   GRUNDKARTE
+   GRUNDKARTE + STRASSEN
    ========================================================= */
 
 function drawBaseMap(scene) {
-
     var g = scene.add.graphics();
     var M = TILE;
 
-    /* --- Gras (gesamte Welt) --- */
     g.fillStyle(0x6db56d, 1);
     g.fillRect(0, 0, WORLD_W, WORLD_H);
 
-    /* --- Fluss --- */
     g.fillStyle(0x3daee0, 1);
     g.fillRect(0, RIVER_ROW * M, WORLD_W, M * 2);
-
     g.fillStyle(0x6dd5ea, 0.35);
     g.fillRect(0, RIVER_ROW * M + 6, WORLD_W, 3);
-    g.fillRect(0, RIVER_ROW * M + M - 4, WORLD_W, 2);
-
-    /* --- Bruecken ueber dem Fluss --- */
-    g.fillStyle(0x555b5e, 1);
-
-    SIDE_COLS.forEach(function (col) {
-        g.fillRect(col * M, RIVER_ROW * M, M, M * 2);
-    });
 
     g.fillStyle(0x555b5e, 1);
+    SIDE_COLS.forEach(function (col) { g.fillRect(col * M, RIVER_ROW * M, M, M * 2); });
     g.fillRect(MAIN_RD_COL * M, RIVER_ROW * M, M, M * 2);
-
-    /* --- Strassen zeichnen --- */
 
     drawRoads(g, M);
 }
 
-
 function drawRoads(g, M) {
+    var rc = 0x555b5e;
 
-    var roadColor = 0x555b5e;
-    var lineColor = 0xffffff;
-
-    /* === HORIZONTAL (quer) === */
-
-    var allCrossRows = CROSS_ROWS_TOP.concat(CROSS_ROWS_BOT);
-
-    allCrossRows.forEach(function (row) {
-        g.fillStyle(roadColor, 1);
+    CROSS_ROWS_TOP.concat(CROSS_ROWS_BOT).forEach(function (row) {
+        g.fillStyle(rc, 1);
         g.fillRect(0, row * M, WORLD_W, M);
-        drawRoadLines(g, 0, row * M, WORLD_W, M);
+        drawHLines(g, 0, row * M, WORLD_W, M);
     });
 
-    /* Hauptstrasse horizontal */
-    g.fillStyle(roadColor, 1);
+    g.fillStyle(rc, 1);
     g.fillRect(0, MAIN_RD_ROW * M, WORLD_W, M);
-    drawRoadLines(g, 0, MAIN_RD_ROW * M, WORLD_W, M);
+    drawHLines(g, 0, MAIN_RD_ROW * M, WORLD_W, M);
 
-
-    /* === VERTIKAL (laengs) === */
-
-    /* Hauptstrasse vertikal */
-    g.fillStyle(roadColor, 1);
+    g.fillStyle(rc, 1);
     g.fillRect(MAIN_RD_COL * M, 0, M, WORLD_H);
-    drawRoadLinesV(g, MAIN_RD_COL * M, 0, M, WORLD_H);
+    drawVLines(g, MAIN_RD_COL * M, 0, M, WORLD_H);
 
-    /* Seitenstrassen */
     SIDE_COLS.forEach(function (col) {
-        g.fillStyle(roadColor, 1);
+        g.fillStyle(rc, 1);
         g.fillRect(col * M, 0, M, WORLD_H);
-        drawRoadLinesV(g, col * M, 0, M, WORLD_H);
+        drawVLines(g, col * M, 0, M, WORLD_H);
     });
 }
 
-
-function drawRoadLines(g, x, y, w, h) {
+function drawHLines(g, x, y, w, h) {
     g.fillStyle(0xffffff, 0.3);
-    var cy = y + h / 2 - 1;
-    var cx = x + 10;
-    while (cx < x + w - 10) {
-        g.fillRect(cx, cy, 18, 3);
-        cx += 32;
-    }
+    var cy = y + h / 2 - 1, cx = x + 10;
+    while (cx < x + w - 10) { g.fillRect(cx, cy, 18, 3); cx += 32; }
 }
 
-function drawRoadLinesV(g, x, y, w, h) {
+function drawVLines(g, x, y, w, h) {
     g.fillStyle(0xffffff, 0.3);
-    var cx = x + w / 2 - 1;
-    var cy = y + 10;
-    while (cy < y + h - 10) {
-        g.fillRect(cx, cy, 3, 18);
-        cy += 32;
-    }
+    var cx = x + w / 2 - 1, cy = y + 10;
+    while (cy < y + h - 10) { g.fillRect(cx, cy, 3, 18); cy += 32; }
 }
-
-
-/* =========================================================
-   HÄUSER
-   ========================================================= */
-
-/* =========================================================
-   GRID-LINIEN
-   ========================================================= */
 
 function drawGridLines(scene) {
     var g = scene.add.graphics();
     g.lineStyle(1, 0x000000, 0.04);
-
-    for (var x = 0; x <= WORLD_W; x += TILE) {
-        g.moveTo(x, 0);
-        g.lineTo(x, WORLD_H);
-    }
-    for (var y = 0; y <= WORLD_H; y += TILE) {
-        g.moveTo(0, y);
-        g.lineTo(WORLD_W, y);
-    }
+    for (var x = 0; x <= WORLD_W; x += TILE) { g.moveTo(x, 0); g.lineTo(x, WORLD_H); }
+    for (var y = 0; y <= WORLD_H; y += TILE) { g.moveTo(0, y); g.lineTo(WORLD_W, y); }
     g.strokePath();
 }
 
 
 /* =========================================================
-   GEBÄUDE (aus Supabase laden)
+   GEBÄUDE – AUS SUPABASE LADEN
    ========================================================= */
 
 async function placeBuildings(scene, player) {
 
-    buildingSprites = [];
+    buildingContainers = [];
 
-    var M = TILE;
+    var { data: dbBuildings, error } = await client.from("buildings").select("*");
+    if (error) console.error("Gebaeude-Lade-Fehler:", error);
 
-    /* === ALLE GEBÄUDE AUS DER DATENBANK LADEN === */
-
-    var { data: dbBuildings, error } = await client
-        .from("buildings")
-        .select("*");
-
-    if (error) {
-        console.error("Fehler beim Laden der Gebaeude:", error);
-    }
-
-    var allBuildings = dbBuildings || [];
-
+    var all = dbBuildings || [];
     var occupied = {};
 
-    allBuildings.forEach(function (b) {
+    all.forEach(function (b) {
+        occupied[b.grid_x + "," + b.grid_y] = true;
 
-        var gx = b.grid_x;
-        var gy = b.grid_y;
-
-        occupied[gx + "," + gy] = true;
-
-        var isOwn = (b.owner_id === player.id);
-
-        createClickableBuilding(
-            scene, gx * M, gy * M,
+        createBuilding(
+            scene,
+            b.grid_x * TILE,
+            b.grid_y * TILE,
             {
                 icon:      b.icon,
                 name:      b.name,
@@ -641,28 +454,22 @@ async function placeBuildings(scene, player) {
                 income:    b.income,
                 level:     b.level,
                 maxLevel:  b.max_level,
-                isPlayer:  isOwn
+                isOwn:     b.owner_id === player.id
             }
         );
     });
 
-
-    /* === Falls Spieler noch kein Gebäude hat → eines erstellen === */
-
-    var hasOwn = allBuildings.some(function (b) {
-        return b.owner_id === player.id;
-    });
+    /* Eigenes Gebäude anlegen falls keins vorhanden */
+    var hasOwn = all.some(function (b) { return b.owner_id === player.id; });
 
     if (!hasOwn) {
-
         var px = player.grid_x || Math.floor(COLS / 2);
         var py = player.grid_y || Math.floor(ROWS / 2) - 5;
 
-        /* Freien Platz finden */
         var tries = 0;
         while (occupied[px + "," + py] && tries < 200) {
-            px = Math.floor(Math.random() * (COLS - 6)) + 3;
-            py = Math.floor(Math.random() * (ROWS - 10)) + 3;
+            px = 3 + Math.floor(Math.random() * (COLS - 6));
+            py = 3 + Math.floor(Math.random() * (ROWS - 10));
             if (isOnRoad(px, py)) { tries++; continue; }
             break;
         }
@@ -680,174 +487,253 @@ async function placeBuildings(scene, player) {
             income:     0
         });
 
-        createClickableBuilding(
-            scene, px * M, py * M,
-            {
-                icon:       "🏢",
-                name:       player.player_name + "s Firma",
-                category:   "Unternehmen",
-                ownerName:  player.player_name,
-                income:     0,
-                level:      1,
-                maxLevel:   5,
-                isPlayer:   true
-            }
-        );
+        createBuilding(scene, px * TILE, py * TILE, {
+            icon: "🏢", name: player.player_name + "s Firma",
+            category: "Unternehmen", ownerName: player.player_name,
+            income: 0, level: 1, maxLevel: 5, isOwn: true
+        });
     }
 }
 
 
-function createClickableBuilding(scene, x, y, data) {
+/* =========================================================
+   GEBÄUDE – REFRESH (alle 10s)
+   ========================================================= */
 
-    var g = scene.add.graphics();
-    var M = TILE;
+async function refreshBuildings(scene, player) {
 
-    var isPlayer = data.isPlayer;
+    var { data: dbBuildings } = await client.from("buildings").select("*");
+    if (!dbBuildings) return;
 
-    /* Schatten */
-    g.fillStyle(0x000000, 0.18);
-    g.fillRect(x + 8, y + 58, M - 8, 6);
+    /* Alte Container entfernen */
+    buildingContainers.forEach(function (c) { c.destroy(); });
+    buildingContainers = [];
 
-    /* Gebaeude-Body */
-    var bodyColor = isPlayer ? 0x0a6b75 : 0x2c5f6e;
-    g.fillStyle(bodyColor, 1);
-    g.fillRect(x + 4, y + 20, M - 8, M - 26);
-
-    /* Dach-Leiste */
-    var roofColor = isPlayer ? 0x55fff0 : 0x40b8a8;
-    g.fillStyle(roofColor, 1);
-    g.fillRect(x + 4, y + 20, M - 8, 6);
-
-    /* Fenster */
-    g.fillStyle(0xc8f0f8, 0.85);
-    g.fillRect(x + 10, y + 32, 10, 10);
-    g.fillRect(x + 26, y + 32, 10, 10);
-    g.fillRect(x + 42, y + 32, 10, 10);
-
-    g.lineStyle(1, 0x000000, 0.08);
-    g.strokeRect(x + 10, y + 32, 10, 10);
-    g.strokeRect(x + 26, y + 32, 10, 10);
-    g.strokeRect(x + 42, y + 32, 10, 10);
-
-    /* Tuer */
-    g.fillStyle(0x143b42, 1);
-    g.fillRect(x + 26, y + 46, 12, 14);
-
-    /* Schild */
-    var labelText = data.icon + " " + data.name;
-    var labelW = labelText.length * 7.5 + 20;
-
-    var bg = scene.add.graphics();
-    var bgColor = isPlayer ? 0x0a6b75 : 0x2c5f6e;
-    bg.fillStyle(bgColor, 0.95);
-    bg.fillRoundedRect(
-        x + M / 2 - labelW / 2,
-        y - 6,
-        labelW,
-        20,
-        4
-    );
-
-    scene.add.text(
-        x + M / 2,
-        y + 4,
-        labelText,
-        {
-            fontSize:   "13px",
-            fontStyle:  "bold",
-            color:      "#ffffff",
-            align:      "center"
-        }
-    ).setOrigin(0.5, 0.5);
-
-    /* Interaktive Zone */
-    var hitZone = scene.add.zone(x + M / 2, y + M / 2, M, M);
-    hitZone.setInteractive(
-        new Phaser.Geom.Rectangle(0, 0, M, M),
-        Phaser.Geom.Rectangle.Contains
-    );
-    hitZone.buildingData = data;
-    hitZone.on("pointerdown", function () {
-        showInfoPanel(data);
+    dbBuildings.forEach(function (b) {
+        createBuilding(scene, b.grid_x * TILE, b.grid_y * TILE, {
+            icon:      b.icon,
+            name:      b.name,
+            category:  b.category,
+            ownerName: b.owner_name || "Unbekannt",
+            income:    b.income,
+            level:     b.level,
+            maxLevel:  b.max_level,
+            isOwn:     b.owner_id === player.id
+        });
     });
-
-    return hitZone;
 }
 
 
 /* =========================================================
-   CAMERA SETUP + INPUT
+   GEBÄUDE – ERSTELLEN (Container mit Animation)
+   ========================================================= */
+
+function createBuilding(scene, x, y, data) {
+
+    var M  = TILE;
+    var cx = x + M / 2;
+    var cy = y + M / 2;
+
+    var container = scene.add.container(cx, cy);
+
+    /* --- Grafik --- */
+    var g = scene.add.graphics();
+
+    var isOwn = data.isOwn;
+
+    /* Schatten */
+    g.fillStyle(0x000000, 0.2);
+    g.fillRoundedRect(-M/2 + 6, -M/2 + 30, M - 12, 8, 3);
+
+    /* Gebaeude-Body */
+    var bodyColor = isOwn ? 0x0a6b75 : 0x2c5f6e;
+    g.fillStyle(bodyColor, 1);
+    g.fillRoundedRect(-M/2 + 2, -M/2 + 16, M - 4, M - 20, 4);
+
+    /* Dach-Leiste */
+    var roofColor = isOwn ? 0x55fff0 : 0x40b8a8;
+    g.fillStyle(roofColor, 1);
+    g.fillRoundedRect(-M/2 + 2, -M/2 + 16, M - 4, 8, { tl: 4, tr: 4, bl: 0, br: 0 });
+
+    /* Glow-Ring (nur eigenes Gebaeude) */
+    if (isOwn) {
+        g.lineStyle(2, 0x55fff0, 0.4);
+        g.strokeRoundedRect(-M/2 - 1, -M/2 + 14, M + 2, M - 16, 6);
+    }
+
+    /* Fenster */
+    g.fillStyle(0xc8f0f8, 0.85);
+    g.fillRect(-M/2 + 10, -M/2 + 30, 12, 10);
+    g.fillRect(-4, -M/2 + 30, 12, 10);
+    g.fillRect(M/2 - 22, -M/2 + 30, 12, 10);
+
+    /* Fenster-Details */
+    g.lineStyle(1, 0x000000, 0.1);
+    g.strokeRect(-M/2 + 10, -M/2 + 30, 12, 10);
+    g.strokeRect(-4, -M/2 + 30, 12, 10);
+    g.strokeRect(M/2 - 22, -M/2 + 30, 12, 10);
+
+    /* Tuer */
+    g.fillStyle(0x143b42, 1);
+    g.fillRoundedRect(-6, -M/2 + 44, 12, 16, { tl: 6, tr: 6, bl: 0, br: 0 });
+    g.fillStyle(0xd4a54a, 1);
+    g.fillCircle(2, -M/2 + 52, 1.5);
+
+    container.add(g);
+
+
+    /* --- Schild --- */
+    var labelText = data.icon + " " + data.name;
+    var labelW = labelText.length * 7 + 24;
+
+    var schildBg = scene.add.graphics();
+    schildBg.fillStyle(isOwn ? 0x0a6b75 : 0x2c5f6e, 0.95);
+    schildBg.fillRoundedRect(-labelW / 2, -M/2 - 14, labelW, 22, 5);
+    container.add(schildBg);
+
+    var label = scene.add.text(0, -M/2 - 3, labelText, {
+        fontSize: "13px", fontStyle: "bold", color: "#ffffff", align: "center"
+    }).setOrigin(0.5, 0.5);
+    container.add(label);
+
+    /* Besitzer-Name */
+    var ownerLabel = scene.add.text(0, M/2 - 6, data.ownerName, {
+        fontSize: "10px", color: isOwn ? "#55fff0" : "#a0d0c8"
+    }).setOrigin(0.5, 0.5);
+    container.add(ownerLabel);
+
+
+    /* --- Interaktive Zone --- */
+    var hitZone = scene.add.zone(0, 0, M + 20, M + 30);
+    hitZone.setInteractive(
+        new Phaser.Geom.Rectangle(-M/2 - 10, -M/2 - 15, M + 20, M + 30),
+        Phaser.Geom.Rectangle.Contains
+    );
+    container.add(hitZone);
+
+
+    /* --- Hover-Effekt --- */
+    hitZone.on("pointerover", function () {
+        scene.tweens.add({
+            targets: container,
+            scaleX: 1.12,
+            scaleY: 1.12,
+            duration: 120,
+            ease: "Back.easeOut"
+        });
+    });
+
+    hitZone.on("pointerout", function () {
+        if (selectedBuilding !== container) {
+            scene.tweens.add({
+                targets: container,
+                scaleX: 1,
+                scaleY: 1,
+                duration: 100,
+                ease: "Sine.easeOut"
+            });
+        }
+    });
+
+
+    /* --- Klick-Effekt --- */
+    hitZone.on("pointerdown", function () {
+
+        playSelectSound();
+
+        /* Vorheriges Aufheben */
+        if (selectedBuilding && selectedBuilding !== container) {
+            scene.tweens.add({
+                targets: selectedBuilding,
+                scaleX: 1, scaleY: 1, duration: 150
+            });
+        }
+
+        selectedBuilding = container;
+
+        /* Pop-Up Animation */
+        scene.tweens.add({
+            targets: container,
+            scaleX: 1.25,
+            scaleY: 1.25,
+            duration: 150,
+            ease: "Back.easeOut",
+            yoyo: true,
+            hold: 200,
+            onComplete: function () {
+                if (selectedBuilding === container) {
+                    scene.tweens.add({
+                        targets: container,
+                        scaleX: 1.12,
+                        scaleY: 1.12,
+                        duration: 100
+                    });
+                }
+            }
+        });
+
+        showInfoPanel(data);
+    });
+
+
+    /* Zuerst unten, Gebäude nach oben */
+    container.setDepth(y);
+
+    buildingContainers.push(container);
+
+    return container;
+}
+
+
+/* =========================================================
+   CAMERA SETUP
    ========================================================= */
 
 function setupCamera(scene) {
-
     var c = scene.cameras.main;
     c.setBounds(0, 0, WORLD_W, WORLD_H);
 
     if (playerData) {
         var px = (playerData.grid_x || Math.floor(COLS / 2)) * TILE;
         var py = (playerData.grid_y || Math.floor(ROWS / 2) - 5) * TILE;
-        c.centerOn(px + 32, py + 32);
+        c.centerOn(px + TILE / 2, py + TILE / 2);
     }
 
-    scene.input.on("wheel", function (pointer, gameObjects, deltaX, deltaY) {
-        var newZoom = c.zoom - deltaY * cam.zoomSpeed;
-        newZoom = Math.max(cam.zoomMin, Math.min(cam.zoomMax, newZoom));
-        c.zoom = newZoom;
+    scene.input.on("wheel", function (ptr, go, dx, dy) {
+        var z = c.zoom - dy * cam.zoomSpeed;
+        c.zoom = Math.max(cam.zoomMin, Math.min(cam.zoomMax, z));
     });
 
-    scene.input.on("pointerdown", function (pointer) {
-        if (pointer.leftButtonDown()) {
+    scene.input.on("pointerdown", function (ptr) {
+        if (ptr.leftButtonDown()) {
             cam.dragging = true;
-            cam.lastX = pointer.x;
-            cam.lastY = pointer.y;
+            cam.lastX = ptr.x;
+            cam.lastY = ptr.y;
         }
     });
 
-    scene.input.on("pointerup", function (pointer) {
-        if (pointer.leftButtonReleased()) {
-            cam.dragging = false;
-        }
+    scene.input.on("pointerup", function (ptr) {
+        if (ptr.leftButtonReleased()) cam.dragging = false;
     });
 }
 
-
 function setupInput(scene) {
-
-    document.addEventListener("keydown", function (e) {
-        keys[e.code] = true;
-    });
-
-    document.addEventListener("keyup", function (e) {
-        keys[e.code] = false;
-    });
+    document.addEventListener("keydown", function (e) { keys[e.code] = true; });
+    document.addEventListener("keyup", function (e) { keys[e.code] = false; });
 }
 
 
 /* =========================================================
-   AUTOMATISCHE SITZUNG
+   SESSION + RESIZE
    ========================================================= */
 
 window.addEventListener("load", async function () {
     try {
-        const { data: { session } } =
-            await client.auth.getSession();
+        var { data: { session } } = await client.auth.getSession();
         if (session) await loadGame();
-    } catch (err) {
-        console.error("Session-Fehler:", err);
-    }
+    } catch (err) { console.error(err); }
 });
 
-
-/* =========================================================
-   FENSTERGROESSE
-   ========================================================= */
-
 window.addEventListener("resize", function () {
-    if (game) {
-        game.scale.resize(
-            window.innerWidth,
-            window.innerHeight - 62
-        );
-    }
+    if (game) game.scale.resize(window.innerWidth, window.innerHeight - 62);
 });
