@@ -19,36 +19,41 @@ const client = supabase.createClient(
 
 /* ---------- WELT-KONSTANTEN ---------- */
 
-const WORLD_W = 3200;
-const WORLD_H = 3200;
+const WORLD_W = 3600;
+const WORLD_H = 3600;
 const TILE    = 64;
 
 const COLS = WORLD_W / TILE;
 const ROWS = WORLD_H / TILE;
 
 
-/* ---------- STRASSEN-POSITIONEN ---------- */
+/* ---------- STRASSEN-POSITIONEN (in Tiles) ---------- */
 
-const MAIN_ROAD_X = 24 * TILE;
-const MAIN_ROAD_Y = 24 * TILE;
-const RIVER_Y     = 28 * TILE;
+const MAIN_RD_COL = 24;
+const MAIN_RD_ROW = 24;
+const RIVER_ROW   = 29;
 
-const SIDE_ROADS_X = [4, 10, 16, 20, 30, 36, 42];
+const SIDE_COLS   = [4, 10, 16, 20, 30, 36, 42];
+const CROSS_ROWS_TOP  = [7, 14, 20];
+const CROSS_ROWS_BOT  = [34, 40, 46];
 
 function isOnRoad(gx, gy) {
 
-    if (gy * TILE === MAIN_ROAD_Y) return true;
+    if (gy === MAIN_RD_ROW) return true;
+    if (gx === MAIN_RD_COL) return true;
 
-    if (gx * TILE === MAIN_ROAD_X) return true;
-
-    for (var i = 0; i < SIDE_ROADS_X.length; i++) {
-
-        if (gx === SIDE_ROADS_X[i]) return true;
+    for (var i = 0; i < SIDE_COLS.length; i++) {
+        if (gx === SIDE_COLS[i]) return true;
     }
 
-    if (gy * TILE === RIVER_Y || gy * TILE === RIVER_Y + TILE) {
-        return true;
+    for (var j = 0; j < CROSS_ROWS_TOP.length; j++) {
+        if (gy === CROSS_ROWS_TOP[j]) return true;
     }
+    for (var j = 0; j < CROSS_ROWS_BOT.length; j++) {
+        if (gy === CROSS_ROWS_BOT[j]) return true;
+    }
+
+    if (gy === RIVER_ROW || gy === RIVER_ROW + 1) return true;
 
     return false;
 }
@@ -245,7 +250,7 @@ async function register() {
         }
 
         const spawnX = Math.floor(COLS / 2);
-        const spawnY = Math.floor(ROWS / 2) - 4;
+        const spawnY = Math.floor(ROWS / 2) - 5;
 
         const { error: pErr } = await client
             .from("players")
@@ -480,129 +485,76 @@ function createWorld(scene, player) {
 function drawBaseMap(scene) {
 
     var g = scene.add.graphics();
+    var M = TILE;
 
-    /* --- Gras --- */
+    /* --- Gras (gesamte Welt) --- */
     g.fillStyle(0x6db56d, 1);
     g.fillRect(0, 0, WORLD_W, WORLD_H);
 
     /* --- Fluss --- */
     g.fillStyle(0x3daee0, 1);
-    g.fillRect(0, RIVER_Y, WORLD_W, TILE * 2);
+    g.fillRect(0, RIVER_ROW * M, WORLD_W, M * 2);
 
-    g.fillStyle(0x5bc4eb, 0.5);
-    g.fillRect(0, RIVER_Y + 10, WORLD_W, 4);
+    g.fillStyle(0x6dd5ea, 0.35);
+    g.fillRect(0, RIVER_ROW * M + 6, WORLD_W, 3);
+    g.fillRect(0, RIVER_ROW * M + M - 4, WORLD_W, 2);
 
-    /* --- Hauptstrasse horizontal --- */
+    /* --- Bruecken ueber dem Fluss --- */
     g.fillStyle(0x555b5e, 1);
-    g.fillRect(0, MAIN_ROAD_Y, WORLD_W, TILE);
-    drawRoadLines(g, 0, MAIN_ROAD_Y, WORLD_W, TILE);
 
-    /* --- Hauptstrasse vertikal --- */
+    SIDE_COLS.forEach(function (col) {
+        g.fillRect(col * M, RIVER_ROW * M, M, M * 2);
+    });
+
     g.fillStyle(0x555b5e, 1);
-    g.fillRect(MAIN_ROAD_X, 0, TILE, WORLD_H);
-    drawRoadLinesV(g, MAIN_ROAD_X, 0, TILE, WORLD_H);
+    g.fillRect(MAIN_RD_COL * M, RIVER_ROW * M, M, M * 2);
 
-    /* --- Seitenstrassen --- */
-    SIDE_ROADS_X.forEach(function (col) {
+    /* --- Strassen zeichnen --- */
 
-        g.fillStyle(0x6b7175, 1);
-        g.fillRect(col * TILE, 0, TILE, RIVER_Y);
-        g.fillRect(col * TILE, RIVER_Y + TILE * 2, TILE, WORLD_H - RIVER_Y - TILE * 2);
+    drawRoads(g, M);
+}
 
-        drawRoadLinesV(g, col * TILE, 0, TILE, RIVER_Y);
-        drawRoadLinesV(g, col * TILE, RIVER_Y + TILE * 2, TILE, WORLD_H - RIVER_Y - TILE * 2);
+
+function drawRoads(g, M) {
+
+    var roadColor = 0x555b5e;
+    var lineColor = 0xffffff;
+
+    /* === HORIZONTAL (quer) === */
+
+    var allCrossRows = CROSS_ROWS_TOP.concat(CROSS_ROWS_BOT);
+
+    allCrossRows.forEach(function (row) {
+        g.fillStyle(roadColor, 1);
+        g.fillRect(0, row * M, WORLD_W, M);
+        drawRoadLines(g, 0, row * M, WORLD_W, M);
     });
 
-    /* --- Querstrassen (horizontal, oberhalb Fluss) --- */
-    var crossY1 = 6 * TILE;
-    var crossY2 = 14 * TILE;
-    var crossY3 = 20 * TILE;
+    /* Hauptstrasse horizontal */
+    g.fillStyle(roadColor, 1);
+    g.fillRect(0, MAIN_RD_ROW * M, WORLD_W, M);
+    drawRoadLines(g, 0, MAIN_RD_ROW * M, WORLD_W, M);
 
-    g.fillStyle(0x6b7175, 1);
 
-    g.fillRect(0, crossY1, MAIN_ROAD_X - TILE, TILE);
-    g.fillRect(MAIN_ROAD_X + TILE * 2, crossY1, WORLD_W - MAIN_ROAD_X - TILE * 2, TILE);
+    /* === VERTIKAL (laengs) === */
 
-    g.fillRect(0, crossY2, MAIN_ROAD_X - TILE, TILE);
-    g.fillRect(MAIN_ROAD_X + TILE * 2, crossY2, WORLD_W - MAIN_ROAD_X - TILE * 2, TILE);
+    /* Hauptstrasse vertikal */
+    g.fillStyle(roadColor, 1);
+    g.fillRect(MAIN_RD_COL * M, 0, M, WORLD_H);
+    drawRoadLinesV(g, MAIN_RD_COL * M, 0, M, WORLD_H);
 
-    g.fillRect(0, crossY3, MAIN_ROAD_X - TILE, TILE);
-    g.fillRect(MAIN_ROAD_X + TILE * 2, crossY3, WORLD_W - MAIN_ROAD_X - TILE * 2, TILE);
-
-    /* --- Querstrassen (horizontal, unterhalb Fluss) --- */
-    var crossY4 = 32 * TILE;
-    var crossY5 = 38 * TILE;
-    var crossY6 = 44 * TILE;
-
-    g.fillRect(0, crossY4, MAIN_ROAD_X - TILE, TILE);
-    g.fillRect(MAIN_ROAD_X + TILE * 2, crossY4, WORLD_W - MAIN_ROAD_X - TILE * 2, TILE);
-
-    g.fillRect(0, crossY5, MAIN_ROAD_X - TILE, TILE);
-    g.fillRect(MAIN_ROAD_X + TILE * 2, crossY5, WORLD_W - MAIN_ROAD_X - TILE * 2, TILE);
-
-    g.fillRect(0, crossY6, MAIN_ROAD_X - TILE, TILE);
-    g.fillRect(MAIN_ROAD_X + TILE * 2, crossY6, WORLD_W - MAIN_ROAD_X - TILE * 2, TILE);
-
-    /* --- Wohnhaeuser (oben) --- */
-    var housesTop = [
-        [2,2],[2,4],[2,8],[2,10],[2,12],
-        [6,2],[6,4],[6,8],[6,10],
-        [12,2],[12,4],[12,8],[12,12],
-        [18,2],[18,4],[18,8],[18,10],
-        [22,2],[22,4],[22,8],[22,10],
-        [28,2],[28,4],[28,8],[28,10],[28,12],
-        [32,2],[32,4],[32,8],[32,10],
-        [38,2],[38,4],[38,8],[38,10],
-        [44,2],[44,4],[44,8],[44,10],
-    ];
-
-    housesTop.forEach(function (pos) {
-        var hx = pos[0] * TILE;
-        var hy = pos[1] * TILE;
-        if (isOnRoad(pos[0], pos[1])) return;
-        drawHouse(g, hx, hy);
+    /* Seitenstrassen */
+    SIDE_COLS.forEach(function (col) {
+        g.fillStyle(roadColor, 1);
+        g.fillRect(col * M, 0, M, WORLD_H);
+        drawRoadLinesV(g, col * M, 0, M, WORLD_H);
     });
-
-    /* --- Wohnhaeuser (unten) --- */
-    var housesBot = [
-        [2,30],[2,33],[2,36],[2,40],[2,42],
-        [6,30],[6,33],[6,36],[6,40],
-        [12,30],[12,33],[12,36],[12,40],
-        [18,30],[18,33],[18,36],[18,40],
-        [22,30],[22,33],[22,36],[22,40],
-        [28,30],[28,33],[28,36],[28,40],[28,42],
-        [32,30],[32,33],[32,36],[32,40],
-        [38,30],[38,33],[38,36],[38,40],
-        [44,30],[44,33],[44,36],[44,40],
-    ];
-
-    housesBot.forEach(function (pos) {
-        var hx = pos[0] * TILE;
-        var hy = pos[1] * TILE;
-        if (isOnRoad(pos[0], pos[1])) return;
-        drawHouse(g, hx, hy);
-    });
-
-    /* --- Park (oben links) --- */
-    g.fillStyle(0x4a9e5c, 1);
-    g.fillRect(1 * TILE, 16 * TILE, TILE * 3, TILE * 3);
-
-    drawTree(g, 1.5 * TILE, 16.5 * TILE);
-    drawTree(g, 2.5 * TILE, 17 * TILE);
-    drawTree(g, 3 * TILE, 18 * TILE);
-    drawTree(g, 1.8 * TILE, 18.3 * TILE);
-
-    /* --- See (unten rechts) --- */
-    g.fillStyle(0x3daee0, 0.7);
-    g.fillCircle(40 * TILE, 42 * TILE, TILE * 2.5);
-    g.fillStyle(0x5bc4eb, 0.3);
-    g.fillCircle(40 * TILE, 42 * TILE, TILE * 1.5);
 }
 
 
 function drawRoadLines(g, x, y, w, h) {
-    g.fillStyle(0xffffff, 0.35);
-    var cy = y + h / 2 - 2;
+    g.fillStyle(0xffffff, 0.3);
+    var cy = y + h / 2 - 1;
     var cx = x + 10;
     while (cx < x + w - 10) {
         g.fillRect(cx, cy, 18, 3);
@@ -611,8 +563,8 @@ function drawRoadLines(g, x, y, w, h) {
 }
 
 function drawRoadLinesV(g, x, y, w, h) {
-    g.fillStyle(0xffffff, 0.35);
-    var cx = x + w / 2 - 2;
+    g.fillStyle(0xffffff, 0.3);
+    var cx = x + w / 2 - 1;
     var cy = y + 10;
     while (cy < y + h - 10) {
         g.fillRect(cx, cy, 3, 18);
@@ -621,40 +573,63 @@ function drawRoadLinesV(g, x, y, w, h) {
 }
 
 
+/* =========================================================
+   HÄUSER
+   ========================================================= */
+
 function drawHouse(g, x, y) {
 
-    var wallColors = [0xf5d76e, 0xf0c070, 0xe8b86d, 0xddc080, 0xf7e6b0];
-    var wall = wallColors[Math.floor(Math.random() * wallColors.length)];
+    var wallPalette = [
+        0xf5e6c8, 0xe8d5b0, 0xd4c4a0,
+        0xf0dcc0, 0xfaf0e0, 0xe0d0b8
+    ];
+    var wall = wallPalette[Math.floor(Math.random() * wallPalette.length)];
 
+    var roofPalette = [
+        0xa03030, 0xb84040, 0x8b2020,
+        0x993333, 0xc05050, 0x7a2828
+    ];
+    var roof = roofPalette[Math.floor(Math.random() * roofPalette.length)];
+
+    /* Schatten */
+    g.fillStyle(0x000000, 0.12);
+    g.fillRect(x + 12, y + 58, 44, 6);
+
+    /* Wand */
     g.fillStyle(wall, 1);
-    g.fillRect(x + 10, y + 24, 44, 36);
+    g.fillRect(x + 8, y + 26, 48, 36);
 
-    var roofColors = [0xc0392b, 0xe74c3c, 0x8e44ad, 0x2980b9, 0x27ae60];
-    var roof = roofColors[Math.floor(Math.random() * roofColors.length)];
-
+    /* Dach */
     g.fillStyle(roof, 1);
     g.beginPath();
-    g.moveTo(x + 6, y + 26);
-    g.lineTo(x + 32, y + 6);
-    g.lineTo(x + 58, y + 26);
+    g.moveTo(x + 4, y + 28);
+    g.lineTo(x + 32, y + 8);
+    g.lineTo(x + 60, y + 28);
     g.closePath();
     g.fillPath();
 
-    g.fillStyle(0x8e5a2c, 1);
-    g.fillRect(x + 26, y + 42, 12, 18);
+    /* Dach-Outline */
+    g.lineStyle(1, 0x000000, 0.15);
+    g.beginPath();
+    g.moveTo(x + 4, y + 28);
+    g.lineTo(x + 32, y + 8);
+    g.lineTo(x + 60, y + 28);
+    g.strokePath();
 
-    g.fillStyle(0x9debf3, 1);
-    g.fillRect(x + 14, y + 32, 9, 9);
-    g.fillRect(x + 41, y + 32, 9, 9);
-}
+    /* Tuer */
+    g.fillStyle(0x6b3a1f, 1);
+    g.fillRect(x + 26, y + 44, 12, 18);
+    g.fillStyle(0xd4a54a, 1);
+    g.fillCircle(x + 35, y + 53, 1.5);
 
+    /* Fenster */
+    g.fillStyle(0x8ec8e8, 1);
+    g.fillRect(x + 12, y + 32, 10, 10);
+    g.fillRect(x + 42, y + 32, 10, 10);
 
-function drawTree(g, x, y) {
-    g.fillStyle(0x2d6a2e, 1);
-    g.fillCircle(x, y, 14);
-    g.fillStyle(0x1e4d20, 1);
-    g.fillCircle(x - 5, y + 3, 10);
-    g.fillCircle(x + 5, y + 3, 10);
+    g.lineStyle(1, 0x000000, 0.1);
+    g.strokeRect(x + 12, y + 32, 10, 10);
+    g.strokeRect(x + 42, y + 32, 10, 10);
 }
 
 
@@ -664,7 +639,7 @@ function drawTree(g, x, y) {
 
 function drawGridLines(scene) {
     var g = scene.add.graphics();
-    g.lineStyle(1, 0x000000, 0.05);
+    g.lineStyle(1, 0x000000, 0.04);
 
     for (var x = 0; x <= WORLD_W; x += TILE) {
         g.moveTo(x, 0);
@@ -679,19 +654,47 @@ function drawGridLines(scene) {
 
 
 /* =========================================================
-   GEBÄUDE
+   GEBÄUDE + HÄUSER
    ========================================================= */
 
 function placeBuildings(scene, player) {
 
     buildingSprites = [];
 
-    /* --- Spieler-Unternehmen --- */
+    var M = TILE;
+
+    /* === WOHNHÄUSER PLATZIEREN === */
+
+    var houseGrid = [];
+
+    for (var gx = 1; gx < COLS - 1; gx++) {
+        for (var gy = 1; gy < ROWS - 1; gy++) {
+            if (isOnRoad(gx, gy)) continue;
+            if (gx === MAIN_RD_COL || gx === MAIN_RD_COL + 1) continue;
+            if (gy >= RIVER_ROW && gy <= RIVER_ROW + 1) continue;
+
+            var nearMainX = Math.abs(gx - MAIN_RD_COL) <= 1;
+            var nearMainY = Math.abs(gy - MAIN_RD_ROW) <= 1;
+            if (nearMainX && nearMainY) continue;
+
+            if ((gx + gy) % 3 === 0 && Math.random() < 0.45) {
+                houseGrid.push([gx, gy]);
+            }
+        }
+    }
+
+    houseGrid.forEach(function (pos) {
+        drawHouse(scene.add.graphics(), pos[0] * M, pos[1] * M);
+    });
+
+
+    /* === SPIELER-UNTERNEHMEN === */
+
     var px = player.grid_x || Math.floor(COLS / 2);
-    var py = player.grid_y || Math.floor(ROWS / 2) - 4;
+    var py = player.grid_y || Math.floor(ROWS / 2) - 5;
 
     var playerBldg = createClickableBuilding(
-        scene, px * TILE, py * TILE,
+        scene, px * M, py * M,
         {
             icon:       "🏢",
             name:       player.player_name + "s Firma",
@@ -706,7 +709,8 @@ function placeBuildings(scene, player) {
     buildingSprites.push(playerBldg);
 
 
-    /* --- NPC-Gebaeude --- */
+    /* === NPC-GEBÄUDE === */
+
     var npcData = [
         { icon: "🍕", name: "Pizzeria Mario",    cat: "Restaurant",   income: 50  },
         { icon: "🛒", name: "Supermarkt Fresh",  cat: "Laden",        income: 30  },
@@ -729,24 +733,22 @@ function placeBuildings(scene, player) {
 
         var tries = 0;
 
-        while (tries < 300) {
+        while (tries < 500) {
 
-            var gx = Math.floor(Math.random() * (COLS - 4)) + 2;
-            var gy = Math.floor(Math.random() * (ROWS - 8)) + 2;
+            var gx = Math.floor(Math.random() * (COLS - 6)) + 3;
+            var gy = Math.floor(Math.random() * (ROWS - 10)) + 3;
 
-            if (occupied[gx + "," + gy]) { tries++; continue; }
-            if (isOnRoad(gx, gy)) { tries++; continue; }
-            if (Math.abs(gx * TILE - MAIN_ROAD_X) < TILE * 2) { tries++; continue; }
-
-            var sy = gy * TILE;
-            if (sy >= RIVER_Y - TILE && sy <= RIVER_Y + TILE * 3) { tries++; continue; }
+            if (occupied[gx + "," + gy])  { tries++; continue; }
+            if (isOnRoad(gx, gy))         { tries++; continue; }
+            if (gx === MAIN_RD_COL || gx === MAIN_RD_COL + 1) { tries++; continue; }
+            if (gy >= RIVER_ROW && gy <= RIVER_ROW + 2) { tries++; continue; }
 
             occupied[gx + "," + gy] = true;
 
             var level = Math.floor(Math.random() * 5) + 1;
 
             createClickableBuilding(
-                scene, gx * TILE, gy * TILE,
+                scene, gx * M, gy * M,
                 {
                     icon:      b.icon,
                     name:      b.name,
@@ -768,53 +770,60 @@ function placeBuildings(scene, player) {
 function createClickableBuilding(scene, x, y, data) {
 
     var g = scene.add.graphics();
+    var M = TILE;
 
-    var baseColor = data.isPlayer ? 0x075d68 : 0x3a6b5e;
+    var isPlayer = data.isPlayer;
 
-    /* Gebaeude */
-    g.fillStyle(baseColor, 1);
-    g.fillRect(x + 4, y + 18, 56, 42);
+    /* Schatten */
+    g.fillStyle(0x000000, 0.18);
+    g.fillRect(x + 8, y + 58, M - 8, 6);
 
-    /* Dach */
-    g.fillStyle(0x55fff0, 1);
-    g.fillRect(x + 4, y + 18, 56, 6);
+    /* Gebaeude-Body */
+    var bodyColor = isPlayer ? 0x0a6b75 : 0x2c5f6e;
+    g.fillStyle(bodyColor, 1);
+    g.fillRect(x + 4, y + 20, M - 8, M - 26);
+
+    /* Dach-Leiste */
+    var roofColor = isPlayer ? 0x55fff0 : 0x40b8a8;
+    g.fillStyle(roofColor, 1);
+    g.fillRect(x + 4, y + 20, M - 8, 6);
 
     /* Fenster */
-    g.fillStyle(0xb8fff8, 0.8);
-    g.fillRect(x + 10, y + 30, 12, 10);
-    g.fillRect(x + 26, y + 30, 12, 10);
-    g.fillRect(x + 42, y + 30, 12, 10);
+    g.fillStyle(0xc8f0f8, 0.85);
+    g.fillRect(x + 10, y + 32, 10, 10);
+    g.fillRect(x + 26, y + 32, 10, 10);
+    g.fillRect(x + 42, y + 32, 10, 10);
+
+    g.lineStyle(1, 0x000000, 0.08);
+    g.strokeRect(x + 10, y + 32, 10, 10);
+    g.strokeRect(x + 26, y + 32, 10, 10);
+    g.strokeRect(x + 42, y + 32, 10, 10);
 
     /* Tuer */
     g.fillStyle(0x143b42, 1);
     g.fillRect(x + 26, y + 46, 12, 14);
 
-    /* Schild-Hintergrund fuer bessere Lesbarkeit */
-    var labelColor = data.isPlayer ? "#075d68" : "#3a6b5e";
+    /* Schild */
+    var labelText = data.icon + " " + data.name;
+    var labelW = labelText.length * 7.5 + 20;
 
     var bg = scene.add.graphics();
-    var labelText = data.icon + " " + data.name;
-    var labelW = labelText.length * 8 + 16;
-
-    bg.fillStyle(
-        data.isPlayer ? 0x075d68 : 0x3a6b5e,
-        0.92
-    );
+    var bgColor = isPlayer ? 0x0a6b75 : 0x2c5f6e;
+    bg.fillStyle(bgColor, 0.95);
     bg.fillRoundedRect(
-        x + 32 - labelW / 2,
-        y - 8,
+        x + M / 2 - labelW / 2,
+        y - 6,
         labelW,
-        22,
+        20,
         4
     );
 
-    /* Name + Icon */
     scene.add.text(
-        x + 32,
-        y + 3,
+        x + M / 2,
+        y + 4,
         labelText,
         {
-            fontSize:   "14px",
+            fontSize:   "13px",
             fontStyle:  "bold",
             color:      "#ffffff",
             align:      "center"
@@ -822,9 +831,9 @@ function createClickableBuilding(scene, x, y, data) {
     ).setOrigin(0.5, 0.5);
 
     /* Interaktive Zone */
-    var hitZone = scene.add.zone(x + 32, y + 32, 64, 64);
+    var hitZone = scene.add.zone(x + M / 2, y + M / 2, M, M);
     hitZone.setInteractive(
-        new Phaser.Geom.Rectangle(0, 0, 64, 64),
+        new Phaser.Geom.Rectangle(0, 0, M, M),
         Phaser.Geom.Rectangle.Contains
     );
     hitZone.buildingData = data;
@@ -847,7 +856,7 @@ function setupCamera(scene) {
 
     if (playerData) {
         var px = (playerData.grid_x || Math.floor(COLS / 2)) * TILE;
-        var py = (playerData.grid_y || Math.floor(ROWS / 2) - 4) * TILE;
+        var py = (playerData.grid_y || Math.floor(ROWS / 2) - 5) * TILE;
         c.centerOn(px + 32, py + 32);
     }
 
