@@ -472,9 +472,10 @@ function createWorld(scene, player) {
 
     drawBaseMap(scene);
     drawGridLines(scene);
-    placeBuildings(scene, player);
     setupCamera(scene);
     setupInput(scene);
+
+    placeBuildings(scene, player);
 }
 
 
@@ -577,62 +578,6 @@ function drawRoadLinesV(g, x, y, w, h) {
    HÄUSER
    ========================================================= */
 
-function drawHouse(g, x, y) {
-
-    var wallPalette = [
-        0xf5e6c8, 0xe8d5b0, 0xd4c4a0,
-        0xf0dcc0, 0xfaf0e0, 0xe0d0b8
-    ];
-    var wall = wallPalette[Math.floor(Math.random() * wallPalette.length)];
-
-    var roofPalette = [
-        0xa03030, 0xb84040, 0x8b2020,
-        0x993333, 0xc05050, 0x7a2828
-    ];
-    var roof = roofPalette[Math.floor(Math.random() * roofPalette.length)];
-
-    /* Schatten */
-    g.fillStyle(0x000000, 0.12);
-    g.fillRect(x + 12, y + 58, 44, 6);
-
-    /* Wand */
-    g.fillStyle(wall, 1);
-    g.fillRect(x + 8, y + 26, 48, 36);
-
-    /* Dach */
-    g.fillStyle(roof, 1);
-    g.beginPath();
-    g.moveTo(x + 4, y + 28);
-    g.lineTo(x + 32, y + 8);
-    g.lineTo(x + 60, y + 28);
-    g.closePath();
-    g.fillPath();
-
-    /* Dach-Outline */
-    g.lineStyle(1, 0x000000, 0.15);
-    g.beginPath();
-    g.moveTo(x + 4, y + 28);
-    g.lineTo(x + 32, y + 8);
-    g.lineTo(x + 60, y + 28);
-    g.strokePath();
-
-    /* Tuer */
-    g.fillStyle(0x6b3a1f, 1);
-    g.fillRect(x + 26, y + 44, 12, 18);
-    g.fillStyle(0xd4a54a, 1);
-    g.fillCircle(x + 35, y + 53, 1.5);
-
-    /* Fenster */
-    g.fillStyle(0x8ec8e8, 1);
-    g.fillRect(x + 12, y + 32, 10, 10);
-    g.fillRect(x + 42, y + 32, 10, 10);
-
-    g.lineStyle(1, 0x000000, 0.1);
-    g.strokeRect(x + 12, y + 32, 10, 10);
-    g.strokeRect(x + 42, y + 32, 10, 10);
-}
-
-
 /* =========================================================
    GRID-LINIEN
    ========================================================= */
@@ -654,116 +599,101 @@ function drawGridLines(scene) {
 
 
 /* =========================================================
-   GEBÄUDE + HÄUSER
+   GEBÄUDE (aus Supabase laden)
    ========================================================= */
 
-function placeBuildings(scene, player) {
+async function placeBuildings(scene, player) {
 
     buildingSprites = [];
 
     var M = TILE;
 
-    /* === WOHNHÄUSER PLATZIEREN === */
+    /* === ALLE GEBÄUDE AUS DER DATENBANK LADEN === */
 
-    var houseGrid = [];
+    var { data: dbBuildings, error } = await client
+        .from("buildings")
+        .select("*");
 
-    for (var gx = 1; gx < COLS - 1; gx++) {
-        for (var gy = 1; gy < ROWS - 1; gy++) {
-            if (isOnRoad(gx, gy)) continue;
-            if (gx === MAIN_RD_COL || gx === MAIN_RD_COL + 1) continue;
-            if (gy >= RIVER_ROW && gy <= RIVER_ROW + 1) continue;
-
-            var nearMainX = Math.abs(gx - MAIN_RD_COL) <= 1;
-            var nearMainY = Math.abs(gy - MAIN_RD_ROW) <= 1;
-            if (nearMainX && nearMainY) continue;
-
-            if ((gx + gy) % 3 === 0 && Math.random() < 0.45) {
-                houseGrid.push([gx, gy]);
-            }
-        }
+    if (error) {
+        console.error("Fehler beim Laden der Gebaeude:", error);
     }
 
-    houseGrid.forEach(function (pos) {
-        drawHouse(scene.add.graphics(), pos[0] * M, pos[1] * M);
-    });
-
-
-    /* === SPIELER-UNTERNEHMEN === */
-
-    var px = player.grid_x || Math.floor(COLS / 2);
-    var py = player.grid_y || Math.floor(ROWS / 2) - 5;
-
-    var playerBldg = createClickableBuilding(
-        scene, px * M, py * M,
-        {
-            icon:       "🏢",
-            name:       player.player_name + "s Firma",
-            category:   "Unternehmen",
-            ownerName:  player.player_name,
-            income:     0,
-            level:      1,
-            maxLevel:   5,
-            isPlayer:   true
-        }
-    );
-    buildingSprites.push(playerBldg);
-
-
-    /* === NPC-GEBÄUDE === */
-
-    var npcData = [
-        { icon: "🍕", name: "Pizzeria Mario",    cat: "Restaurant",   income: 50  },
-        { icon: "🛒", name: "Supermarkt Fresh",  cat: "Laden",        income: 30  },
-        { icon: "🔧", name: "Werkstatt Braun",   cat: "Werkstatt",    income: 80  },
-        { icon: "💼", name: "Agentur Schmidt",   cat: "Agentur",      income: 120 },
-        { icon: "💻", name: "TechStart GmbH",    cat: "Tech-Startup", income: 200 },
-        { icon: "🏨", name: "Hotel Panorama",    cat: "Hotel",        income: 150 },
-        { icon: "🍕", name: "Bella Napoli",      cat: "Restaurant",   income: 55  },
-        { icon: "🛒", name: "MarketKlein",       cat: "Laden",        income: 35  },
-        { icon: "🔧", name: "AutoService Max",   cat: "Werkstatt",    income: 85  },
-        { icon: "💼", name: "Beratung Plus",     cat: "Agentur",      income: 130 },
-        { icon: "💻", name: "CodeFactory",       cat: "Tech-Startup", income: 210 },
-        { icon: "🏨", name: "Grand Stay",        cat: "Hotel",        income: 160 },
-    ];
+    var allBuildings = dbBuildings || [];
 
     var occupied = {};
-    occupied[px + "," + py] = true;
 
-    npcData.forEach(function (b) {
+    allBuildings.forEach(function (b) {
 
+        var gx = b.grid_x;
+        var gy = b.grid_y;
+
+        occupied[gx + "," + gy] = true;
+
+        var isOwn = (b.owner_id === player.id);
+
+        createClickableBuilding(
+            scene, gx * M, gy * M,
+            {
+                icon:      b.icon,
+                name:      b.name,
+                category:  b.category,
+                ownerName: b.owner_name || "Unbekannt",
+                income:    b.income,
+                level:     b.level,
+                maxLevel:  b.max_level,
+                isPlayer:  isOwn
+            }
+        );
+    });
+
+
+    /* === Falls Spieler noch kein Gebäude hat → eines erstellen === */
+
+    var hasOwn = allBuildings.some(function (b) {
+        return b.owner_id === player.id;
+    });
+
+    if (!hasOwn) {
+
+        var px = player.grid_x || Math.floor(COLS / 2);
+        var py = player.grid_y || Math.floor(ROWS / 2) - 5;
+
+        /* Freien Platz finden */
         var tries = 0;
-
-        while (tries < 500) {
-
-            var gx = Math.floor(Math.random() * (COLS - 6)) + 3;
-            var gy = Math.floor(Math.random() * (ROWS - 10)) + 3;
-
-            if (occupied[gx + "," + gy])  { tries++; continue; }
-            if (isOnRoad(gx, gy))         { tries++; continue; }
-            if (gx === MAIN_RD_COL || gx === MAIN_RD_COL + 1) { tries++; continue; }
-            if (gy >= RIVER_ROW && gy <= RIVER_ROW + 2) { tries++; continue; }
-
-            occupied[gx + "," + gy] = true;
-
-            var level = Math.floor(Math.random() * 5) + 1;
-
-            createClickableBuilding(
-                scene, gx * M, gy * M,
-                {
-                    icon:      b.icon,
-                    name:      b.name,
-                    category:  b.cat,
-                    ownerName: "Stadt",
-                    income:    b.income * level,
-                    level:     level,
-                    maxLevel:  5,
-                    isPlayer:  false
-                }
-            );
-
+        while (occupied[px + "," + py] && tries < 200) {
+            px = Math.floor(Math.random() * (COLS - 6)) + 3;
+            py = Math.floor(Math.random() * (ROWS - 10)) + 3;
+            if (isOnRoad(px, py)) { tries++; continue; }
             break;
         }
-    });
+
+        await client.from("buildings").insert({
+            owner_id:   player.id,
+            owner_name: player.player_name,
+            name:       player.player_name + "s Firma",
+            icon:       "🏢",
+            category:   "Unternehmen",
+            grid_x:     px,
+            grid_y:     py,
+            level:      1,
+            max_level:  5,
+            income:     0
+        });
+
+        createClickableBuilding(
+            scene, px * M, py * M,
+            {
+                icon:       "🏢",
+                name:       player.player_name + "s Firma",
+                category:   "Unternehmen",
+                ownerName:  player.player_name,
+                income:     0,
+                level:      1,
+                maxLevel:   5,
+                isPlayer:   true
+            }
+        );
+    }
 }
 
 
