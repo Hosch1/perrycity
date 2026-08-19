@@ -6,100 +6,342 @@ html,
 body {
     margin: 0;
     padding: 0;
+
     width: 100%;
     height: 100%;
+
     overflow: hidden;
-    font-family: Arial, sans-serif;
-    background: #1c1c1c;
+
+    font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+
+    background:
+        linear-gradient(
+            135deg,
+            #053b45,
+            #087f8c,
+            #20c9c3
+        );
+
     color: white;
 }
 
-/* LOGIN */
+
+/* =========================
+   LOGIN
+   ========================= */
 
 #login-screen {
+
     position: absolute;
+
     left: 50%;
     top: 50%;
-    transform: translate(-50%, -50%);
 
-    width: min(90%, 400px);
+    transform:
+        translate(-50%, -50%);
 
-    padding: 30px;
+    width: min(90%, 430px);
 
-    background: #292929;
+    padding: 38px;
 
-    border-radius: 18px;
+    border-radius: 24px;
+
+    background:
+        rgba(4, 48, 57, 0.92);
+
+    border:
+        1px solid
+        rgba(91, 255, 243, 0.25);
+
+    box-shadow:
+        0 25px 70px
+        rgba(0, 0, 0, 0.45);
 
     text-align: center;
 
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    backdrop-filter:
+        blur(12px);
 }
 
-#login-screen h1 {
-    margin-top: 0;
-    font-size: 42px;
+
+/* =========================
+   LOGO
+   ========================= */
+
+.logo-city {
+
+    font-size: 55px;
+
+    margin-bottom: -5px;
 }
 
-#login-screen p {
-    color: #cccccc;
+.logo h1 {
+
+    margin: 0;
+
+    font-size: 48px;
+
+    letter-spacing: 1px;
+
+    color: #67fff4;
+
+    text-shadow:
+        0 0 20px
+        rgba(103, 255, 244, 0.35);
 }
 
-#login-screen input {
-    width: 100%;
-
-    padding: 13px;
+.subtitle {
 
     margin-top: 10px;
+    margin-bottom: 25px;
 
-    border: none;
-    border-radius: 8px;
-
-    font-size: 16px;
-}
-
-button {
-    padding: 11px 16px;
-
-    margin: 12px 5px 0;
-
-    border: none;
-    border-radius: 8px;
-
-    cursor: pointer;
+    color: #c7fffa;
 
     font-size: 15px;
 }
 
-button:hover {
-    transform: scale(1.03);
+
+/* =========================
+   INPUTS
+   ========================= */
+
+#login-screen input {
+
+    width: 100%;
+
+    padding: 14px;
+
+    margin-top: 12px;
+
+    border: 1px solid
+        rgba(103, 255, 244, 0.2);
+
+    border-radius: 11px;
+
+    outline: none;
+
+    background: #062f38;
+
+    color: white;
+
+    font-size: 16px;
+}
+
+#login-screen input::placeholder {
+
+    color: #8dbec0;
+}
+
+#login-screen input:focus {
+
+    border-color: #67fff4;
+
+    box-shadow:
+        0 0 0 3px
+        rgba(103, 255, 244, 0.12);
 }
 
 
-/* SPIEL */
+/* =========================
+   BUTTONS
+   ========================= */
+
+.login-buttons {
+
+    display: flex;
+
+    gap: 10px;
+
+    margin-top: 14px;
+}
+
+button {
+
+    border: none;
+
+    border-radius: 10px;
+
+    padding: 12px 17px;
+
+    cursor: pointer;
+
+    font-size: 15px;
+
+    transition:
+        0.15s ease;
+
+    background:
+        #20c9c3;
+
+    color:
+        #05363d;
+
+    font-weight: bold;
+
+    box-shadow:
+        0 5px 15px
+        rgba(0, 0, 0, 0.2);
+}
+
+.login-buttons button {
+
+    flex: 1;
+}
+
+button:hover {
+
+    transform: translateY(-2px);
+
+    background:
+        #67fff4;
+}
+
+button:active {
+
+    transform: translateY(0);
+}
+
+
+/* =========================
+   FEHLERMELDUNG
+   ========================= */
+
+#message {
+
+    min-height: 22px;
+
+    margin-top: 18px;
+
+    color: #b8fffa;
+
+    font-size: 14px;
+}
+
+
+/* =========================
+   SPIEL
+   ========================= */
 
 #game-screen {
+
     display: none;
 
     width: 100%;
     height: 100%;
 }
 
-#topbar {
-    width: 100%;
-    height: 60px;
 
-    background: #242424;
+/* =========================
+   TOPBAR
+   ========================= */
+
+#topbar {
+
+    width: 100%;
+
+    height: 62px;
+
+    background:
+        linear-gradient(
+            90deg,
+            #043942,
+            #075965,
+            #087982
+        );
+
+    border-bottom:
+        1px solid
+        rgba(103, 255, 244, 0.2);
 
     display: flex;
+
     align-items: center;
-    justify-content: space-around;
+
+    justify-content:
+        space-around;
+
+    position: relative;
 
     z-index: 10;
 
-    position: relative;
+    box-shadow:
+        0 5px 20px
+        rgba(0, 0, 0, 0.25);
 }
 
+
+/* =========================
+   BRAND
+   ========================= */
+
+.brand {
+
+    color:
+        #67fff4;
+
+    font-size:
+        18px;
+}
+
+
+/* =========================
+   GELD
+   ========================= */
+
+.money-box {
+
+    padding:
+        8px 13px;
+
+    border-radius:
+        9px;
+
+    background:
+        rgba(103, 255, 244, 0.12);
+
+    color:
+        #d5fffb;
+}
+
+
+/* =========================
+   LOGOUT
+   ========================= */
+
+.logout-button {
+
+    padding:
+        8px 13px;
+
+    margin: 0;
+
+    background:
+        rgba(255, 255, 255, 0.12);
+
+    color:
+        white;
+
+    box-shadow: none;
+}
+
+.logout-button:hover {
+
+    background:
+        rgba(255, 255, 255, 0.22);
+}
+
+
+/* =========================
+   GAME
+   ========================= */
+
 #game {
+
     width: 100%;
-    height: calc(100% - 60px);
+
+    height:
+        calc(100% - 62px);
 }
