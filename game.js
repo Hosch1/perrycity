@@ -68,7 +68,7 @@ function internalLogin(name) {
     return (
         normalizeName(name)
             .replace(/[^a-z0-9_-]/g, "")
-        + "@perrycity.game"
+        + "@perrycity.auth"
     );
 }
 
