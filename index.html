@@ -11,7 +11,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
 </head>
-
 <body>
 
     <div id="login-screen">
@@ -83,6 +82,22 @@
         </div>
 
         <div id="game"></div>
+
+        <div id="info-panel" class="hidden">
+            <button id="info-close" onclick="closeInfoPanel()">&times;</button>
+            <div id="info-icon"></div>
+            <h2 id="info-name">-</h2>
+            <p id="info-type">-</p>
+            <div id="info-stats"></div>
+            <div id="info-owner-box">
+                <span>Besitzer:</span>
+                <strong id="info-owner">-</strong>
+            </div>
+        </div>
+
+        <div id="controls-hint">
+            WASD / Maus ziehen = Karte bewegen &middot; Scrollrad = Zoom
+        </div>
 
     </div>
 
