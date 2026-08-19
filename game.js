@@ -1,6 +1,8 @@
-/* =========================================
+/* =========================================================
    PERRYCITY
-   ========================================= */
+   ========================================================= */
+
+/* ---------- SUPABASE ---------- */
 
 const SUPABASE_URL =
     "https://nrloacwgehhukzkgtoas.supabase.co";
@@ -8,22 +10,22 @@ const SUPABASE_URL =
 const SUPABASE_KEY =
     "sb_publishable_EUQuU4qxS8pPHuBCc7R_tg_6RXLtNN6";
 
+const client = supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+);
 
-const supabaseClient =
-    supabase.createClient(
-        SUPABASE_URL,
-        SUPABASE_KEY
-    );
 
+/* ---------- SPIELVARIABLEN ---------- */
 
 let currentPlayer = null;
 let playerData = null;
 let game = null;
 
 
-/* =========================================
-   LOGIN-NAME
-   ========================================= */
+/* =========================================================
+   HILFSFUNKTIONEN
+   ========================================================= */
 
 function normalizeName(name) {
 
@@ -34,47 +36,67 @@ function normalizeName(name) {
 
 
 /*
-   Supabase braucht intern eine
-   technische E-Mail-Adresse.
+    Wir benutzen intern eine technische Adresse,
+    damit Supabase weiterhin seine normale
+    Passwort-Authentifizierung verwenden kann.
 
-   Der Spieler sieht diese niemals.
+    Der Spieler sieht diese Adresse niemals.
 */
-
 function internalLogin(name) {
 
     return (
         normalizeName(name)
-        .replace(/[^a-z0-9_-]/g, "")
+            .replace(/[^a-z0-9_-]/g, "")
         + "@perrycity.game"
     );
 }
 
 
-/* =========================================
+function formatMoney(amount) {
+
+    return new Intl.NumberFormat("de-DE")
+        .format(amount);
+}
+
+
+/* =========================================================
    REGISTRIEREN
-   ========================================= */
+   ========================================================= */
 
 async function register() {
 
+    const playerNameElement =
+        document.getElementById("player-name");
+
+    const passwordElement =
+        document.getElementById("password");
+
+    const messageElement =
+        document.getElementById("message");
+
+
+    if (!playerNameElement || !passwordElement) {
+
+        console.error(
+            "Spielername oder Passwortfeld nicht gefunden."
+        );
+
+        return;
+    }
+
+
     const playerName =
-        document
-            .getElementById("player-name")
-            .value
-            .trim();
+        playerNameElement.value.trim();
 
     const password =
-        document
-            .getElementById("password")
-            .value;
+        passwordElement.value;
 
-    const message =
-        document
-            .getElementById("message");
 
+    /* ---------- EINGABEN PRÜFEN ---------- */
 
     if (!playerName || !password) {
 
-        message.textContent =
+        messageElement.textContent =
             "Bitte Spielername und Passwort eingeben.";
 
         return;
@@ -83,8 +105,17 @@ async function register() {
 
     if (playerName.length < 3) {
 
-        message.textContent =
+        messageElement.textContent =
             "Der Spielername muss mindestens 3 Zeichen haben.";
+
+        return;
+    }
+
+
+    if (playerName.length > 20) {
+
+        messageElement.textContent =
+            "Der Spielername darf höchstens 20 Zeichen haben.";
 
         return;
     }
@@ -92,19 +123,17 @@ async function register() {
 
     if (password.length < 6) {
 
-        message.textContent =
+        messageElement.textContent =
             "Das Passwort muss mindestens 6 Zeichen haben.";
 
         return;
     }
 
 
-    if (
-        !/^[a-zA-Z0-9_-]+$/.test(playerName)
-    ) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(playerName)) {
 
-        message.textContent =
-            "Nur Buchstaben, Zahlen, _ und - sind erlaubt.";
+        messageElement.textContent =
+            "Erlaubt sind nur Buchstaben, Zahlen, _ und -.";
 
         return;
     }
@@ -114,70 +143,67 @@ async function register() {
         normalizeName(playerName);
 
 
-    /*
-       Prüfen, ob der Name bereits existiert
-    */
-
-    const {
-        data: existingPlayer,
-        error: existingError
-    } = await supabaseClient
-        .from("players")
-        .select("id")
-        .eq("login_name", loginName)
-        .maybeSingle();
-
-
-    if (existingError) {
-
-        console.error(existingError);
-
-        message.textContent =
-            "Fehler bei der Prüfung des Spielernamens.";
-
-        return;
-    }
-
-
-    if (existingPlayer) {
-
-        message.textContent =
-            "Dieser Spielername ist bereits vergeben.";
-
-        return;
-    }
-
-
-    message.textContent =
+    messageElement.textContent =
         "Spieler wird erstellt...";
 
 
-    /*
-       Interne Auth-ID
-    */
+    try {
 
-    const internalEmail =
-        internalLogin(playerName);
+        /* ---------- NAMEN PRÜFEN ---------- */
+
+        const {
+            data: existingPlayer,
+            error: existingError
+        } = await client
+            .from("players")
+            .select("id")
+            .eq("login_name", loginName)
+            .maybeSingle();
 
 
-    const {
-        data,
-        error
-    } =
-        await supabaseClient.auth.signUp({
+        if (existingError) {
 
-            email:
-                internalEmail,
+            console.error(
+                "Fehler bei der Namensprüfung:",
+                existingError
+            );
 
-            password:
-                password,
+            messageElement.textContent =
+                "Fehler bei der Namensprüfung.";
+
+            return;
+        }
+
+
+        if (existingPlayer) {
+
+            messageElement.textContent =
+                "Dieser Spielername ist bereits vergeben.";
+
+            return;
+        }
+
+
+        /* ---------- SUPABASE ACCOUNT ---------- */
+
+        const internalEmail =
+            internalLogin(playerName);
+
+
+        const {
+            data: authData,
+            error: authError
+        } = await client.auth.signUp({
+
+            email: internalEmail,
+
+            password: password,
 
             options: {
 
                 data: {
 
-                    player_name:
-                        playerName
+                    player_name: playerName
 
                 }
 
@@ -186,260 +212,300 @@ async function register() {
         });
 
 
-    if (error) {
+        if (authError) {
 
-        console.error(error);
+            console.error(
+                "Auth-Fehler:",
+                authError
+            );
 
-        message.textContent =
-            error.message;
+            messageElement.textContent =
+                authError.message;
 
-        return;
-    }
-
-
-    if (!data.user) {
-
-        message.textContent =
-            "Spieler konnte nicht erstellt werden.";
-
-        return;
-    }
+            return;
+        }
 
 
-    /*
-       Spielerdaten speichern
-    */
+        if (!authData.user) {
 
-    const {
-        error: playerError
-    } =
-        await supabaseClient
+            messageElement.textContent =
+                "Spieler konnte nicht erstellt werden.";
+
+            return;
+        }
+
+
+        /*
+            Falls Supabase noch eine
+            E-Mail-Bestätigung verlangt.
+        */
+
+        if (!authData.session) {
+
+            messageElement.textContent =
+                "Der Account wurde erstellt. Prüfe bitte deine Supabase-Einstellungen: 'Confirm email' muss ausgeschaltet sein.";
+
+            return;
+        }
+
+
+        /* ---------- SPIELERPROFIL ---------- */
+
+        const {
+            error: playerError
+        } = await client
             .from("players")
             .insert({
 
-                id:
-                    data.user.id,
+                id: authData.user.id,
 
-                player_name:
-                    playerName,
+                player_name: playerName,
 
-                login_name:
-                    loginName,
+                login_name: loginName,
 
-                money:
-                    10000,
+                money: 10000,
 
-                x:
-                    400,
+                x: 400,
 
-                y:
-                    300
+                y: 300
 
             });
 
 
-    if (playerError) {
+        if (playerError) {
 
-        console.error(playerError);
+            console.error(
+                "Spielerprofil-Fehler:",
+                playerError
+            );
 
-        message.textContent =
-            "Spieler wurde erstellt, aber das Profil konnte nicht gespeichert werden.";
+            messageElement.textContent =
+                "Account wurde erstellt, aber das Spielerprofil konnte nicht gespeichert werden.";
 
-        return;
+            return;
+        }
+
+
+        messageElement.textContent =
+            "Willkommen in Perrycity!";
+
+
+        await loadGame();
+
+    } catch (error) {
+
+        console.error(
+            "Registrierungsfehler:",
+            error
+        );
+
+        messageElement.textContent =
+            "Ein unerwarteter Fehler ist aufgetreten.";
+
     }
-
-
-    await loadGame();
 }
 
 
-/* =========================================
-   EINLOGGEN
-   ========================================= */
+/* =========================================================
+   LOGIN
+   ========================================================= */
 
 async function login() {
 
+    const playerNameElement =
+        document.getElementById("player-name");
+
+    const passwordElement =
+        document.getElementById("password");
+
+    const messageElement =
+        document.getElementById("message");
+
+
     const playerName =
-        document
-            .getElementById("player-name")
-            .value
-            .trim();
+        playerNameElement.value.trim();
 
     const password =
-        document
-            .getElementById("password")
-            .value;
-
-    const message =
-        document
-            .getElementById("message");
+        passwordElement.value;
 
 
     if (!playerName || !password) {
 
-        message.textContent =
+        messageElement.textContent =
             "Bitte Spielername und Passwort eingeben.";
 
         return;
     }
 
 
-    message.textContent =
+    messageElement.textContent =
         "Login...";
 
 
-    const internalEmail =
-        internalLogin(playerName);
+    try {
+
+        const internalEmail =
+            internalLogin(playerName);
 
 
-    const {
-        data,
-        error
-    } =
-        await supabaseClient.auth
-            .signInWithPassword({
+        const {
+            data,
+            error
+        } = await client.auth.signInWithPassword({
 
-                email:
-                    internalEmail,
+            email: internalEmail,
 
-                password:
-                    password
+            password: password
 
-            });
+        });
 
 
-    if (error) {
+        if (error) {
 
-        console.error(error);
+            console.error(
+                "Login-Fehler:",
+                error
+            );
 
-        message.textContent =
-            "Spielername oder Passwort ist falsch.";
+            messageElement.textContent =
+                "Spielername oder Passwort ist falsch.";
 
-        return;
+            return;
+        }
+
+
+        if (!data.user) {
+
+            messageElement.textContent =
+                "Login fehlgeschlagen.";
+
+            return;
+        }
+
+
+        await loadGame();
+
+    } catch (error) {
+
+        console.error(
+            "Unerwarteter Login-Fehler:",
+            error
+        );
+
+        messageElement.textContent =
+            "Ein unerwarteter Fehler ist aufgetreten.";
+
     }
-
-
-    if (!data.user) {
-
-        message.textContent =
-            "Login fehlgeschlagen.";
-
-        return;
-    }
-
-
-    await loadGame();
 }
 
 
-/* =========================================
+/* =========================================================
    SPIEL LADEN
-   ========================================= */
+   ========================================================= */
 
 async function loadGame() {
 
-    const {
-        data: {
-            user
+    try {
+
+        const {
+            data: {
+                user
+            }
+        } = await client.auth.getUser();
+
+
+        if (!user) {
+
+            return;
         }
-    } =
-        await supabaseClient.auth
-            .getUser();
 
 
-    if (!user) {
-        return;
-    }
+        currentPlayer =
+            user;
 
 
-    currentPlayer =
-        user;
-
-
-    const {
-        data,
-        error
-    } =
-        await supabaseClient
+        const {
+            data,
+            error
+        } = await client
             .from("players")
             .select("*")
             .eq("id", user.id)
             .single();
 
 
-    if (error) {
+        if (error) {
 
-        console.error(error);
+            console.error(
+                "Spieler konnte nicht geladen werden:",
+                error
+            );
+
+            document
+                .getElementById("message")
+                .textContent =
+                "Spielerprofil konnte nicht geladen werden.";
+
+            return;
+        }
+
+
+        playerData =
+            data;
+
 
         document
-            .getElementById("message")
+            .getElementById("display-name")
             .textContent =
-            "Spielerprofil konnte nicht geladen werden.";
+            data.player_name;
 
-        return;
+
+        document
+            .getElementById("money")
+            .textContent =
+            formatMoney(data.money);
+
+
+        document
+            .getElementById("login-screen")
+            .style.display =
+            "none";
+
+
+        document
+            .getElementById("game-screen")
+            .style.display =
+            "block";
+
+
+        startGame(data);
+
+    } catch (error) {
+
+        console.error(
+            "Fehler beim Laden des Spiels:",
+            error
+        );
+
     }
-
-
-    playerData =
-        data;
-
-
-    document
-        .getElementById("display-name")
-        .textContent =
-        data.player_name;
-
-
-    document
-        .getElementById("money")
-        .textContent =
-        formatMoney(data.money);
-
-
-    document
-        .getElementById("login-screen")
-        .style.display =
-        "none";
-
-
-    document
-        .getElementById("game-screen")
-        .style.display =
-        "block";
-
-
-    startGame(data);
 }
 
 
-/* =========================================
-   GELD
-   ========================================= */
-
-function formatMoney(amount) {
-
-    return new Intl.NumberFormat(
-        "de-DE"
-    ).format(amount);
-}
-
-
-/* =========================================
+/* =========================================================
    LOGOUT
-   ========================================= */
+   ========================================================= */
 
 async function logout() {
 
-    await supabaseClient.auth
-        .signOut();
+    await client.auth.signOut();
 
     location.reload();
 }
 
 
-/* =========================================
-   SPIEL
-   ========================================= */
+/* =========================================================
+   SPIEL STARTEN
+   ========================================================= */
 
 function startGame(player) {
 
@@ -453,32 +519,26 @@ function startGame(player) {
 
     const config = {
 
-        type:
-            Phaser.AUTO,
+        type: Phaser.AUTO,
 
-        parent:
-            "game",
+        parent: "game",
 
-        width:
-            window.innerWidth,
+        width: window.innerWidth,
 
-        height:
-            window.innerHeight - 62,
+        height: window.innerHeight - 62,
 
-        backgroundColor:
-            "#55c7b9",
+        backgroundColor: "#73cbbf",
 
         scene: {
 
-            create:
-                function () {
+            create: function () {
 
-                    createWorld(
-                        this,
-                        player
-                    );
+                createWorld(
+                    this,
+                    player
+                );
 
-                }
+            }
 
         }
 
@@ -490,39 +550,17 @@ function startGame(player) {
 }
 
 
-/* =========================================
-   WELT
-   ========================================= */
+/* =========================================================
+   WELT ERSTELLEN
+   ========================================================= */
 
-function createWorld(
-    scene,
-    player
-) {
+function createWorld(scene, player) {
 
     const graphics =
         scene.add.graphics();
 
 
-    /*
-       Wasser/Aqua-Hintergrund
-    */
-
-    graphics.fillStyle(
-        0x6dd5c7,
-        1
-    );
-
-    graphics.fillRect(
-        0,
-        0,
-        window.innerWidth,
-        window.innerHeight
-    );
-
-
-    /*
-       Stadtfläche
-    */
+    /* ---------- GRÜNFLÄCHE ---------- */
 
     graphics.fillStyle(
         0x82c96c,
@@ -537,12 +575,10 @@ function createWorld(
     );
 
 
-    /*
-       Straßen
-    */
+    /* ---------- STRASSEN ---------- */
 
     graphics.fillStyle(
-        0x555f63,
+        0x596368,
         1
     );
 
@@ -553,6 +589,7 @@ function createWorld(
         75
     );
 
+
     graphics.fillRect(
         450,
         0,
@@ -561,12 +598,10 @@ function createWorld(
     );
 
 
-    /*
-       Wasserkanal
-    */
+    /* ---------- WASSER ---------- */
 
     graphics.fillStyle(
-        0x3bc7d4,
+        0x38c8d4,
         1
     );
 
@@ -574,13 +609,11 @@ function createWorld(
         0,
         600,
         window.innerWidth,
-        60
+        65
     );
 
 
-    /*
-       Häuser
-    */
+    /* ---------- HÄUSER ---------- */
 
     createHouse(scene, 120, 100);
     createHouse(scene, 250, 180);
@@ -590,9 +623,7 @@ function createWorld(
     createHouse(scene, 650, 480);
 
 
-    /*
-       Unternehmen
-    */
+    /* ---------- FIRMENGEBÄUDE ---------- */
 
     createCompany(
         scene,
@@ -605,9 +636,7 @@ function createWorld(
     );
 
 
-    /*
-       Titel
-    */
+    /* ---------- TITEL ---------- */
 
     scene.add.text(
 
@@ -619,20 +648,15 @@ function createWorld(
 
         {
 
-            fontSize:
-                "30px",
+            fontSize: "30px",
 
-            color:
-                "#ffffff",
+            color: "#ffffff",
 
-            fontStyle:
-                "bold",
+            fontStyle: "bold",
 
-            stroke:
-                "#064c55",
+            stroke: "#064c55",
 
-            strokeThickness:
-                6
+            strokeThickness: 6
 
         }
 
@@ -640,9 +664,9 @@ function createWorld(
 }
 
 
-/* =========================================
+/* =========================================================
    HAUS
-   ========================================= */
+   ========================================================= */
 
 function createHouse(
     scene,
@@ -653,6 +677,8 @@ function createHouse(
     const graphics =
         scene.add.graphics();
 
+
+    /* Haus */
 
     graphics.fillStyle(
         0xf5d76e,
@@ -667,8 +693,10 @@ function createHouse(
     );
 
 
+    /* Dach */
+
     graphics.fillStyle(
-        0x0b8f91,
+        0x078f91,
         1
     );
 
@@ -695,6 +723,8 @@ function createHouse(
     graphics.fillPath();
 
 
+    /* Tür */
+
     graphics.fillStyle(
         0x8e5a2c,
         1
@@ -707,6 +737,8 @@ function createHouse(
         30
     );
 
+
+    /* Fenster */
 
     graphics.fillStyle(
         0x9debf3,
@@ -729,9 +761,9 @@ function createHouse(
 }
 
 
-/* =========================================
+/* =========================================================
    UNTERNEHMEN
-   ========================================= */
+   ========================================================= */
 
 function createCompany(
     scene,
@@ -744,9 +776,7 @@ function createCompany(
         scene.add.graphics();
 
 
-    /*
-       Hauptgebäude
-    */
+    /* Gebäude */
 
     graphics.fillStyle(
         0x075d68,
@@ -761,9 +791,7 @@ function createCompany(
     );
 
 
-    /*
-       Aqua-Akzent
-    */
+    /* Aqua-Dach */
 
     graphics.fillStyle(
         0x55fff0,
@@ -778,15 +806,12 @@ function createCompany(
     );
 
 
-    /*
-       Fenster
-    */
+    /* Fenster */
 
     graphics.fillStyle(
         0xb8fff8,
         1
     );
-
 
     graphics.fillRect(
         x + 15,
@@ -810,9 +835,7 @@ function createCompany(
     );
 
 
-    /*
-       Tür
-    */
+    /* Tür */
 
     graphics.fillStyle(
         0x143b42,
@@ -827,9 +850,7 @@ function createCompany(
     );
 
 
-    /*
-       Name
-    */
+    /* Spielername */
 
     scene.add.text(
 
@@ -841,14 +862,11 @@ function createCompany(
 
         {
 
-            fontSize:
-                "18px",
+            fontSize: "18px",
 
-            color:
-                "#ffffff",
+            color: "#ffffff",
 
-            backgroundColor:
-                "#075d68",
+            backgroundColor: "#075d68",
 
             padding: {
 
@@ -868,36 +886,45 @@ function createCompany(
 }
 
 
-/* =========================================
-   AUTOMATISCHER LOGIN
-   ========================================= */
+/* =========================================================
+   AUTOMATISCHE SITZUNG
+   ========================================================= */
 
 window.addEventListener(
     "load",
     async function () {
 
-        const {
-            data: {
-                session
+        try {
+
+            const {
+                data: {
+                    session
+                }
+            } = await client.auth.getSession();
+
+
+            if (session) {
+
+                await loadGame();
+
             }
-        } =
-            await supabaseClient
-                .auth
-                .getSession();
 
+        } catch (error) {
 
-        if (session) {
+            console.error(
+                "Session-Fehler:",
+                error
+            );
 
-            await loadGame();
         }
 
     }
 );
 
 
-/* =========================================
+/* =========================================================
    FENSTERGRÖSSE
-   ========================================= */
+   ========================================================= */
 
 window.addEventListener(
     "resize",
@@ -906,11 +933,8 @@ window.addEventListener(
         if (game) {
 
             game.scale.resize(
-
                 window.innerWidth,
-
                 window.innerHeight - 62
-
             );
 
         }
