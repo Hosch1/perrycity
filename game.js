@@ -6,8 +6,8 @@
    HIER DEINE SUPABASE DATEN EINTRAGEN
 */
 
-const SUPABASE_URL = "DEINE_SUPABASE_URL";
-const SUPABASE_KEY = "DEIN_PUBLISHABLE_KEY";
+const SUPABASE_URL = "https://nrloacwgehhukzkgtoas.supabase.co";
+const SUPABASE_KEY = "sb_publishable_EUQuU4qxS8pPHuBCc7R_tg_6RXLtNN6";
 
 
 /*
